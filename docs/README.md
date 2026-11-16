@@ -20,14 +20,15 @@ This repository implements eleven educational architecture families. Each guide 
 - [Encoder-decoder Transformer](architectures/transformer-seq2seq.md): configurable encoder/decoder stacks, causal self-attention, cross-attention, teacher forcing and numerical generation.
 - [Tokenization and text generation](architectures/transformer-text.md): Unicode characters, learned embeddings, categorical loss, EOS and a trained two-layer text example.
 - [File corpus, checkpoints and sampling](architectures/transformer-corpus-checkpoints.md): JSONL/plain text, larger teaching corpus, save/load/resume and varied generation.
-- [Minibatch Adam and resume](architectures/transformer-minibatch-adam.md): averaged gradients, moments, bias correction, v2 checkpoints and an executable resumed-training demo.
+- [Minibatch Adam and resume](architectures/transformer-minibatch-adam.md): averaged gradients, moments, bias correction, versioned checkpoints and an executable resumed-training demo.
+- [Clipping and warmup/decay](architectures/transformer-clipping-schedule.md): global gradient norm, per-update rates, v3 state and a resumed-training demo.
 
 ## Shared material
 
 - [Installation and quick start](../README.md#install-and-quick-start).
 - [Original dense API](API.md) and [dense mathematics](MATHEMATICS.md).
 - [Training engine and common contracts](TRAINING.md): shared gradient API, reverse-mode differentiation, ownership, validation and parameter ordering.
-- [Checkpoint format](CHECKPOINT_FORMAT.md): v1/v2 schemas, Adam state, dimensions, integrity and resume metadata.
+- [Checkpoint format](CHECKPOINT_FORMAT.md): v1/v2/v3 schemas, Adam state, dimensions, integrity and resume metadata.
 - [Validation](VALIDATION.md): what the tests establish and what they do not establish.
 - [Implementation log](WORK_LOG.md): actions, reasons and validation evidence.
 
@@ -42,6 +43,7 @@ dotnet run --project examples/Transformer --configuration Release --no-build -- 
 dotnet run --project examples/TextGeneration --configuration Release --no-build
 dotnet run --project examples/CorpusTraining --configuration Release --no-build -- demo
 dotnet run --project examples/CorpusTraining --configuration Release --no-build -- adam-demo
+dotnet run --project examples/CorpusTraining --configuration Release --no-build -- scheduled-demo
 ```
 
 Use any individual selector: `perceptron`, `mlp`, `rbf`, `hopfield`, `som`, `cnn`, `rnn`, `lstm`, `gru`, `autoencoder`, or `transformer`. Invalid selectors return exit code 2; failed example acceptance checks return 1.

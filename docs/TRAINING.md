@@ -29,7 +29,7 @@ The tape is recreated for each call, with iterative reverse traversal. It is an 
 
 Linear blocks use Xavier uniform weights with bounds `±sqrt(6/(fanIn+fanOut))` and zero biases. Layer normalization starts with gamma 1 and beta 0. Recurrent gate biases, including LSTM forget biases, start at zero. The same topology, seed, runtime, inputs and training order reproduce results. This is not a cross-runtime serialization guarantee.
 
-Models copy topology, RBF centers and supplied parameter arrays. Predictions, gradients, encodings and snapshots are detached arrays. Caller-owned inputs must not change during a call. Model instances are mutable and require external synchronization around concurrent mutation; otherwise use separate instances. TextTransformer supports the versioned [checkpoint format](CHECKPOINT_FORMAT.md); numerical models still use manual snapshots. Text training now supports mean-gradient minibatches and saved Adam state; numerical `TrainSample` methods retain SGD. There is no clipping, automatic scheduling, regularization or GPU execution.
+Models copy topology, RBF centers and supplied parameter arrays. Predictions, gradients, encodings and snapshots are detached arrays. Caller-owned inputs must not change during a call. Model instances are mutable and require external synchronization around concurrent mutation; otherwise use separate instances. TextTransformer supports the versioned [checkpoint format](CHECKPOINT_FORMAT.md); numerical models still use manual snapshots. Text training now supports mean-gradient minibatches and saved Adam state; numerical `TrainSample` methods retain SGD. Adam supports optional global norm clipping and a linear warmup/decay schedule. There is no metric-based automatic scheduling, regularization or GPU execution.
 
 ## Public boundaries
 
@@ -97,4 +97,9 @@ The Adam `TextTraining.TrainEpoch` overload averages per-sample mean token gradi
 
 `AdamOptimizer` binds one model instance and stores copied first/second moments, step and immutable beta/epsilon options. Each step is transactional across weights and moments. Directly replacing model weights while keeping an old optimizer changes the algorithm: restore a paired checkpoint or construct a new optimizer when intentionally restarting. The model and optimizer must be externally synchronized as one unit during concurrent mutation/saving.
 
-Checkpoint v2 includes batch size/optimizer kind in training metadata and optional Adam state; v1 SGD checkpoints remain readable. Resume requires the same corpus/order, epoch, batch size, rate, shuffle seed, parameters, moments and counter for exact same-runtime continuation. See [the didactic Adam guide](architectures/transformer-minibatch-adam.md) and [versioned format](CHECKPOINT_FORMAT.md).
+Checkpoint v3 includes optional clipping/schedule settings as well as batch size/optimizer kind in training metadata and optional Adam state; v1 SGD and v2 constant-rate Adam checkpoints remain readable. Resume requires the same corpus/order, epoch, batch size, rate, shuffle seed, parameters, moments and counter for exact same-runtime continuation. See [the didactic Adam guide](architectures/transformer-minibatch-adam.md) and [versioned format](CHECKPOINT_FORMAT.md).
+
+
+## Gradient clipping and rate scheduling
+
+Configured Adam clips the whole minibatch-mean gradient vector by its global L2 norm before updating either moment. Its optional immutable `LinearWarmupDecay` selects a rate from the base rate and one-based next successful update index. Counter advancement commits with weights and moments, so failures do not advance warmup/decay. The checkpoint persists policy and completed Adam step; there is no independent mutable scheduler cursor. `GetNextLearningRate` is read-only. The SGD `TrainSample` paths retain their existing behavior. See [the full didactic guide](architectures/transformer-clipping-schedule.md) for formulas, validation, CLI and exact-resume conditions.

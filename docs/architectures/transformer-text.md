@@ -154,3 +154,5 @@ Further reading: [Attention Is All You Need](https://arxiv.org/abs/1706.03762) f
 [Multi-head encoder](transformer.md) · [numerical encoder-decoder](transformer-seq2seq.md) · [documentation index](../README.md).
 
 For minibatch gradients, Adam moments and resumed training, see [the Adam guide](transformer-minibatch-adam.md).
+
+For optional global clipping and per-update warmup/decay, see [the training-controls guide](transformer-clipping-schedule.md).

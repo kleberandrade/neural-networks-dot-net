@@ -7,7 +7,7 @@ dotnet build --configuration Release
 dotnet run --project tests/NeuralNetworks.Tests --configuration Release --no-build
 ```
 
-`dotnet test` does not run this suite. CI also runs both original XOR modes, every architecture demo, the multi-head/encoder-decoder example, the two-layer text-generation example, file-backed corpus/checkpoint demo, minibatch Adam/resume demo and the formatter on Linux, macOS and Windows.
+`dotnet test` does not run this suite. CI also runs both original XOR modes, every architecture demo, the multi-head/encoder-decoder example, the two-layer text-generation example, file-backed corpus/checkpoint demo, minibatch Adam/resume demo, clipping/schedule demo and the formatter on Linux, macOS and Windows.
 
 ## Numerical behavior
 
@@ -60,3 +60,10 @@ The suite does not establish real-world model quality, large-scale performance, 
 Four additional behavioral groups independently check two-step Adam arithmetic/moment correction, equal sample-gradient averaging at unchanged weights (including unequal target lengths), partial batches, transactional invalid/overflow rejection, model binding and detached optimizer snapshots. Saved/reloaded Adam epochs match uninterrupted weights and moment arrays exactly on the same runtime. Schema tests reject malformed dimensions, options, counters, missing moments and optimizer/progress mismatches even with valid recomputed checksums; a legacy v1 SGD envelope remains readable.
 
 The Adam demo checkpoints/reloads at epoch 150 (step 750), resumes to epoch 300 (step 1,500), and checks the same loss/reply-diversity gates as the SGD corpus demo. All reported output measurements describe training-corpus memorization. Documentation diagrams are rendered and inspected separately; their arrows are explanatory and are not a performance benchmark.
+
+
+## Clipping and learning-rate policy
+
+Four additional groups check known global-norm clipping, finite extreme coordinates and small thresholds, detached arrays, warmup/decay/floor boundary values and invalid settings. Independent sample gradients establish that clipping applies after batch averaging and before moments; invalid/non-finite inputs and scheduled-rate underflow preserve parameters/state and schedule position. Interrupted/reloaded training crosses warmup/decay and matches uninterrupted weights, moments and counters exactly. Tests reject invalid/missing v3 policy fields with valid recomputed checksums and resume nonzero legacy v2 Adam state with clipping/scheduling disabled.
+
+The scheduled demo uses the same learning/diversity/EOS gates as the corpus demo and an actual midpoint save/reload. Its training-corpus measurements do not establish superior generalization or speed. All examples run in the three-OS CI matrix.

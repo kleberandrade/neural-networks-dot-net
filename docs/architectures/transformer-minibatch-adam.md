@@ -11,7 +11,7 @@ flowchart TD
     G --> A["One bias-corrected Adam update"]
     M["Previous moments m, v and step t"] --> A
     A --> U["Commit new weights, moments and step together"]
-    U -- "at completed saved epoch" --> F["Checkpoint v2: model + tokenizer + progress + Adam state"]
+    U -- "at completed saved epoch" --> F["Checkpoint v3: model + tokenizer + progress + Adam state"]
     F --> L["Restore all state; continue at the next epoch"]
 ```
 
@@ -46,7 +46,7 @@ vHat  = v / (1 - beta2^t)
 weight = weight - learningRate × mHat / (sqrt(vHat) + epsilon)
 ```
 
-All operations on vectors are elementwise. The correction counters the initial zero-moment bias. Epsilon is added **outside** the square root. Defaults are beta1 `0.9`, beta2 `0.999`, epsilon `1e-8`; beta values must be finite in `[0, 1)` and epsilon/rate finite and positive. This is ordinary Adam, without AdamW weight decay, AMSGrad, clipping or a scheduler.
+All operations on vectors are elementwise. The correction counters the initial zero-moment bias. Epsilon is added **outside** the square root. Defaults are beta1 `0.9`, beta2 `0.999`, epsilon `1e-8`; beta values must be finite in `[0, 1)` and epsilon/rate finite and positive. This is ordinary Adam, without AdamW weight decay or AMSGrad. Optional [global clipping and warmup/decay](transformer-clipping-schedule.md) can be configured; both are disabled by default.
 
 Saving only weights loses `m`, `v` and `t`, so a newly constructed optimizer takes a different next step. A resumable checkpoint therefore saves all three plus Adam options and the training batch size. The step counter counts updates, not samples or epochs: 20 samples, batch size 4 and 300 epochs produce 1,500 steps.
 
@@ -55,7 +55,7 @@ Saving only weights loses `m`, `v` and `t`, so a newly constructed optimizer tak
 - [TextTransformer.cs](../../src/NeuralNetworks/TextTransformer.cs) evaluates loss and gradient from one tape for a training sample, without updating parameters.
 - [TextTraining.cs](../../src/NeuralNetworks/TextTraining.cs) exposes `TrainBatch(model, samples, optimizer, rate)` and an Adam `TrainEpoch` overload. It validates/copies every epoch sample before any batch update, shuffles indices using `Random(unchecked(shuffleSeed + epoch))`, processes complete/partial batches and returns a sample-weighted average of pre-update batch losses. The existing SGD overload remains available.
 - [AdamOptimizer.cs](../../src/NeuralNetworks/AdamOptimizer.cs) binds one optimizer to one `ParameterizedModel` instance. `Step` computes candidate moments and weights, checks finite arithmetic and commits only after every coordinate succeeds. `GetState` and `Restore` copy arrays. Invalid state, malformed gradients, overflow or step-counter overflow leave weights and optimizer state unchanged for that step.
-- [TextCheckpoint.cs](../../src/NeuralNetworks/TextCheckpoint.cs) now writes v2, including optional Adam state and batch metadata; it still reads v1 SGD files. Moment array lengths, finite values, nonnegative second moments, counters/options and optimizer/progress agreement are validated. It does not silently discard corrupt or missing Adam state.
+- [TextCheckpoint.cs](../../src/NeuralNetworks/TextCheckpoint.cs) now writes v3, including optional Adam state and batch metadata; it still reads v1 SGD and v2 Adam files. Moment array lengths, finite values, nonnegative second moments, counters/options and optimizer/progress agreement are validated. It does not silently discard corrupt or missing Adam state.
 - [CorpusCommands.cs](../../examples/CorpusTraining/CorpusCommands.cs) preserves SGD as the default, adds Adam configuration to `train`, restores it automatically in `resume` and supplies `adam-demo` with an actual midpoint save/reload.
 
 A failed numerical update is transactional for **one batch**, not the entire epoch: earlier successful batches remain in RAM. The file stays at the last saved completed epoch. Instances and their inputs need external synchronization if used concurrently. Do not manually replace a model's weights and continue with unrelated old moments; create/restore the matching optimizer along with its weights.
@@ -120,3 +120,5 @@ This snippet exercises resume after one epoch; it does not assert learned text q
 [AdamTests.cs](../../tests/NeuralNetworks.Tests/AdamTests.cs) independently checks first/second-step moment values and bias correction, compares an actual minibatch update to the independently averaged sample gradients (including unequal reply lengths), exercises a final partial batch, and verifies rejected inputs/overflow preserve parameters and moments. It compares interrupted/reloaded and uninterrupted shuffled training, rejects malformed optimizer state even with recomputed checksums, and loads a legacy v1 SGD envelope. The complete Adam demo runs in three-OS CI alongside every existing example.
 
 [Checkpoint schema](../CHECKPOINT_FORMAT.md) · [text model](transformer-text.md) · [all architecture diagrams](../README.md).
+
+[Gradient clipping and learning-rate scheduling](transformer-clipping-schedule.md) extends this workflow without changing the default Adam example.
