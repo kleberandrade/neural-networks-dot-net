@@ -32,7 +32,11 @@ var tests = new (string Name, Action Run)[]
     ("Model/tokenizer checkpoint roundtrip and continued SGD", CorpusCheckpointTests.CheckpointRoundtrip),
     ("Corrupt, incompatible and oversized checkpoints reject", CorpusCheckpointTests.InvalidCheckpoints),
     ("Seeded temperature/top-k sampling", CorpusCheckpointTests.Sampling),
-    ("File-backed epoch resume matches uninterrupted training", CorpusCheckpointTests.EpochResume)
+    ("File-backed epoch resume matches uninterrupted training", CorpusCheckpointTests.EpochResume),
+    ("Adam known moments and bias-corrected updates", AdamTests.KnownUpdates),
+    ("Minibatch mean gradients and final partial batch", AdamTests.MinibatchMean),
+    ("Adam validation, ownership and atomic rejection", AdamTests.Boundaries),
+    ("Adam checkpoint resume and legacy SGD compatibility", AdamTests.CheckpointResume)
 };
 var failures = 0;
 foreach (var test in tests)

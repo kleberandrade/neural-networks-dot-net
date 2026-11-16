@@ -5,8 +5,9 @@ using NeuralNetworks.Internal;
 
 namespace NeuralNetworks;
 
-public sealed record TextTrainingState(int EpochsCompleted, int ShuffleSeed, double LearningRate, string CorpusFingerprint);
-public sealed record LoadedTextCheckpoint(TextTransformer Model, CharacterTokenizer Tokenizer, TextTrainingState? Training);
+public sealed record TextTrainingState(int EpochsCompleted, int ShuffleSeed, double LearningRate, string CorpusFingerprint,
+    int BatchSize = 1, string Optimizer = "sgd");
+public sealed record LoadedTextCheckpoint(TextTransformer Model, CharacterTokenizer Tokenizer, TextTrainingState? Training, AdamOptimizer? Optimizer = null);
 public sealed record TextCheckpointLimits(long MaxFileBytes = 32 * 1024 * 1024, int MaxParameters = 1000000,
     int MaxVocabularySize = 65536, int MaxSequenceLength = 4096, int MaxLayers = 64);
 
@@ -14,19 +15,19 @@ public sealed record TextCheckpointLimits(long MaxFileBytes = 32 * 1024 * 1024, 
 public static class TextCheckpoint
 {
     private const string Format = "neural-networks-dot-net.text";
-    private const int Version = 1;
+    private const int Version = 2;
     private sealed record Configuration(int VocabularySize, int SourceLength, int TargetLength, int ModelSize,
         int HeadCount, int FeedForwardSize, int EncoderLayerCount, int DecoderLayerCount, int Seed);
-    private sealed record Payload(Configuration Configuration, string[] Vocabulary, double[] Parameters, TextTrainingState? Training);
+    private sealed record Payload(Configuration Configuration, string[] Vocabulary, double[] Parameters, TextTrainingState? Training, AdamState? Optimizer);
 
-    public static void Save(string path, TextTransformer model, CharacterTokenizer tokenizer, TextTrainingState? training = null)
+    public static void Save(string path, TextTransformer model, CharacterTokenizer tokenizer, TextTrainingState? training = null, AdamOptimizer? optimizer = null)
     {
         ArgumentNullException.ThrowIfNull(model); ArgumentNullException.ThrowIfNull(tokenizer);
         if (model.VocabularySize != tokenizer.VocabularySize) throw new ArgumentException("Model and tokenizer vocabulary sizes differ.");
-        ValidateState(training);
+        ValidateState(training); optimizer?.EnsureModel(model); ValidateOptimizerPair(training, optimizer is not null);
         var config = new Configuration(model.VocabularySize, model.SourceLength, model.TargetLength, model.ModelSize,
             model.HeadCount, model.FeedForwardSize, model.EncoderLayerCount, model.DecoderLayerCount, model.InitializationSeed);
-        var payload = JsonSerializer.SerializeToUtf8Bytes(new Payload(config, tokenizer.GetVocabulary(), model.GetParameters(), training), TextFiles.Json);
+        var payload = JsonSerializer.SerializeToUtf8Bytes(new Payload(config, tokenizer.GetVocabulary(), model.GetParameters(), training, optimizer?.GetState()), TextFiles.Json);
         var hash = Convert.ToHexString(SHA256.HashData(payload)).ToLowerInvariant();
         using var output = new MemoryStream();
         using (var writer = new Utf8JsonWriter(output))
@@ -45,9 +46,12 @@ public static class TextCheckpoint
         {
             using var document = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 32 });
             var root = document.RootElement; TextFiles.UniqueProperties(root); Names(root, "format", "version", "payload", "sha256");
-            if (root.GetProperty("format").GetString() != Format || root.GetProperty("version").GetInt32() != Version)
+            var version = root.GetProperty("version").GetInt32();
+            if (root.GetProperty("format").GetString() != Format || (version != 1 && version != Version))
                 throw new InvalidDataException("Unsupported text checkpoint format/version.");
-            var payload = root.GetProperty("payload"); Names(payload, "configuration", "vocabulary", "parameters", "training");
+            var payload = root.GetProperty("payload");
+            if (version == 1) Names(payload, "configuration", "vocabulary", "parameters", "training");
+            else Names(payload, "configuration", "vocabulary", "parameters", "training", "optimizer");
             var expectedHash = root.GetProperty("sha256").GetString();
             if (!IsHash(expectedHash) || !CryptographicOperations.FixedTimeEquals(Convert.FromHexString(expectedHash!),
                 SHA256.HashData(Encoding.UTF8.GetBytes(payload.GetRawText()))))
@@ -60,11 +64,18 @@ public static class TextCheckpoint
             var values = parameters.Deserialize<double[]>(TextFiles.Json)!;
             if (values.Any(x => !double.IsFinite(x))) throw new InvalidDataException("Checkpoint parameters must be finite.");
             var tokenizer = CharacterTokenizer.FromVocabulary(vocabulary.Deserialize<string[]>(TextFiles.Json)!);
-            var training = payload.GetProperty("training").Deserialize<TextTrainingState?>(TextFiles.Json); ValidateState(training);
+            var progress = payload.GetProperty("training");
+            if (version == 1 && progress.ValueKind != JsonValueKind.Null)
+                Names(progress, "epochsCompleted", "shuffleSeed", "learningRate", "corpusFingerprint");
+            if (version == 2 && progress.ValueKind != JsonValueKind.Null)
+                Names(progress, "epochsCompleted", "shuffleSeed", "learningRate", "corpusFingerprint", "batchSize", "optimizer");
+            var training = progress.Deserialize<TextTrainingState?>(TextFiles.Json); ValidateState(training);
+            var adamState = version == 1 ? null : ReadAdamState(payload.GetProperty("optimizer"), expected);
+            ValidateOptimizerPair(training, adamState is not null);
             var model = new TextTransformer(config.VocabularySize, config.SourceLength, config.TargetLength, config.ModelSize,
                 config.HeadCount, config.FeedForwardSize, config.EncoderLayerCount, config.DecoderLayerCount, config.Seed);
             model.SetParameters(values);
-            return new LoadedTextCheckpoint(model, tokenizer, training);
+            return new LoadedTextCheckpoint(model, tokenizer, training, adamState is null ? null : AdamOptimizer.Restore(model, adamState));
         }
         catch (Exception error) when (error is JsonException or ArgumentException or InvalidOperationException or KeyNotFoundException or OverflowException or FormatException)
         { throw new InvalidDataException("Invalid text checkpoint: " + error.Message, error); }
@@ -97,8 +108,26 @@ public static class TextCheckpoint
     private static bool IsHash(string? hash) => hash is { Length: 64 } && hash.All(Uri.IsHexDigit);
     private static void ValidateState(TextTrainingState? state)
     {
-        if (state is not null && (state.EpochsCompleted < 0 || !double.IsFinite(state.LearningRate) || state.LearningRate <= 0 || !IsHash(state.CorpusFingerprint)))
+        if (state is not null && (state.EpochsCompleted < 0 || !double.IsFinite(state.LearningRate) || state.LearningRate <= 0 || !IsHash(state.CorpusFingerprint)
+            || state.BatchSize <= 0 || state.Optimizer is not ("sgd" or "adam") || (state.Optimizer == "sgd" && state.BatchSize != 1)))
             throw new ArgumentException("Invalid training progress metadata.", nameof(state));
+    }
+
+    private static AdamState? ReadAdamState(JsonElement value, int parameterCount)
+    {
+        if (value.ValueKind == JsonValueKind.Null) return null;
+        Names(value, "options", "step", "firstMoment", "secondMoment");
+        Names(value.GetProperty("options"), "beta1", "beta2", "epsilon");
+        if (value.GetProperty("firstMoment").GetArrayLength() != parameterCount || value.GetProperty("secondMoment").GetArrayLength() != parameterCount)
+            throw new InvalidDataException("Adam moments must match model parameter count.");
+        var state = value.Deserialize<AdamState>(TextFiles.Json)!; AdamOptimizer.ValidateState(state, parameterCount);
+        return state;
+    }
+
+    private static void ValidateOptimizerPair(TextTrainingState? training, bool hasAdam)
+    {
+        if (training is not null && (training.Optimizer == "adam") != hasAdam)
+            throw new ArgumentException("Training optimizer and saved Adam state disagree.");
     }
 
     private static void Names(JsonElement value, params string[] names)

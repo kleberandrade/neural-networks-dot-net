@@ -60,9 +60,15 @@ public sealed class TextTransformer : ParameterizedModel
 
     public double[] ComputeGradient(int[] source, int[] target)
     {
+        return LossAndGradient(source, target).Gradient;
+    }
+
+    internal (double Loss, double[] Gradient) LossAndGradient(int[] source, int[] target)
+    {
         var sample = PrepareTarget(source, target);
         var graph = Evaluate(sample.Source, sample.Decoder);
-        return Derivatives(Objective(graph.Logits, sample.Target), graph.Parameters);
+        var loss = Objective(graph.Logits, sample.Target);
+        return (loss.Value, Derivatives(loss, graph.Parameters));
     }
 
     public double TrainSample(int[] source, int[] target, double learningRate)
