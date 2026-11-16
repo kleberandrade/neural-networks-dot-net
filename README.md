@@ -119,6 +119,14 @@ dotnet run --project examples/CorpusTraining -- generate --checkpoint artifacts/
 
 The file-backed example trains 20 JSONL records, saves model/configuration/tokenizer together, reloads without retraining, and demonstrates greedy and seeded temperature/top-k generation. It supports plain UTF-8 continuation windows and `train`, `resume`, `generate` commands. See the [didactic corpus/checkpoint guide](docs/architectures/transformer-corpus-checkpoints.md) and [versioned file format](docs/CHECKPOINT_FORMAT.md).
 
+### Minibatch Adam and resumable optimizer state
+
+```sh
+dotnet run --project examples/CorpusTraining -- adam-demo
+```
+
+This example trains in minibatches, saves/reloads Adam moments and its step counter halfway through, then resumes and generates replies. New training accepts `--optimizer adam --batch-size 4`; `resume` restores saved batch/optimizer settings. See [the didactic Adam guide](docs/architectures/transformer-minibatch-adam.md) and [checkpoint v1/v2 format](docs/CHECKPOINT_FORMAT.md). Every [model guide](docs/README.md) now includes a computation diagram rendered by GitHub.
+
 ## Tests and CI
 
 ```sh
@@ -130,6 +138,7 @@ dotnet run --project examples/Architectures --configuration Release --no-build -
 dotnet run --project examples/Transformer --configuration Release --no-build -- all
 dotnet run --project examples/TextGeneration --configuration Release --no-build
 dotnet run --project examples/CorpusTraining --configuration Release --no-build -- demo
+dotnet run --project examples/CorpusTraining --configuration Release --no-build -- adam-demo
 dotnet format --verify-no-changes --no-restore
 ```
 
@@ -143,9 +152,9 @@ See the [individual architecture guides](docs/README.md), [common contracts](doc
 
 - The models implement the specific variants listed above. CNN has one input channel/stage. RNN/LSTM/GRU use fixed lengths and final outputs; the Transformer encoder-decoder produces a vector at every target position. Transformer supports configurable multi-head encoder/decoder stacks. Numerical sequence prediction and character-token text generation have separate APIs and objectives.
 - The numerical `IGradientNetwork` models use sigmoid heads and half summed squared-error loss. `TextTransformer` uses learned token embeddings, vocabulary logits/softmax and mean categorical cross-entropy. RBF centers and width are fixed; Perceptron, Hopfield and SOM use their own learning rules.
-- Sequential per-sample SGD only. Data preparation, normalization, shuffling, evaluation splits and stopping criteria belong to the caller. Seeds and learning rates affect convergence. Sigmoid can saturate, ReLU filters can become inactive, and sequence gradients can vanish or explode.
+- Numerical `TrainSample` methods use per-sample SGD; text training also supports mean-gradient minibatches with Adam and resumable optimizer state. Data preparation, normalization, shuffling, evaluation splits and stopping criteria belong to the caller. Seeds and learning rates affect convergence. Sigmoid can saturate, ReLU filters can become inactive, and sequence gradients can vanish or explode.
 - Finite inputs can still overflow arithmetic. Rejected steps preserve model parameters. Instances require synchronization around concurrent mutation.
-- Explicit scalar loops and temporary graphs favor readability over speed. There is no GPU execution, optimized tensor backend, minibatch optimizer or gradient clipping. TextTransformer has a versioned model/tokenizer checkpoint; the numerical models have no standard persistence format. Use tiny datasets and short sequences.
+- Explicit scalar loops and temporary graphs favor readability over speed. There is no GPU execution, optimized tensor backend or gradient clipping. TextTransformer has a versioned model/tokenizer checkpoint; the numerical models have no standard persistence format. Use tiny datasets and short sequences.
 - Seeds reproduce results on the same runtime, not across all runtime versions. Large dimensions can exhaust memory; parameter-count overflow is checked.
 - Example training errors are measurements on synthetic training cases, with no real-world accuracy, throughput or generalization guarantee.
 

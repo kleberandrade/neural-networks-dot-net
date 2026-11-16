@@ -1,5 +1,23 @@
 # Encoder-decoder Transformer for numerical sequences
 
+## Computation diagram
+
+```mermaid
+flowchart TD
+    S["Source features"] --> P["Source projection + positions"] --> E["Encoder stack: self-attention and FFN"]
+    E --> M["Final encoder memory"]
+    T["BOS + previous target vectors"] --> Q["Target projection + positions"]
+    subgraph decoder["Decoder layer: repeat with independent weights"]
+        D["Causal self-attention + residual / norm"] --> C["Cross-attention + residual / norm"]
+        C --> F["FFN + residual / norm"]
+    end
+    Q --> D
+    M -- "keys and values at every layer" --> C
+    F --> Y["After final layer: dense sigmoid vector per position"]
+```
+
+Attention and FFN sublayers include residual addition and post-normalization. Training uses shifted true targets; generation feeds back continuous predictions. Padding masks exclude trailing padded keys and loss positions.
+
 ## How it works
 
 An encoder-decoder maps a source sequence to an output sequence. The encoder produces one memory vector per source position. The decoder uses two kinds of attention: causal self-attention over its earlier inputs, and cross-attention whose keys/values come from encoder memory.

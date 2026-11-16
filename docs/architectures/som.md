@@ -1,5 +1,20 @@
 # Self-organizing map (SOM)
 
+## Computation diagram
+
+```mermaid
+flowchart TD
+    X["Unlabelled input vector"] --> D["Distance to every prototype"]
+    W["Grid of learned prototypes"] --> D --> B["Choose best matching unit"]
+    B --> N["Gaussian influence by grid distance"]
+    X --> U["Move winner and neighbors toward input"]
+    N --> U
+    U -. "replace prototype weights" .-> W
+    B --> O["Inference result: grid location"]
+```
+
+The grid supplies neighborhood distances; feature distances select the winner. Radius zero updates the winner alone. There are no class labels or backpropagation.
+
 ## How it works
 
 A SOM learns prototype vectors arranged on a grid without target labels. For input `x`, the best matching unit (BMU) is the prototype with the smallest Euclidean distance. Its neighbors move toward the same input:

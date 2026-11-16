@@ -1,5 +1,22 @@
 # Gated recurrent unit (GRU)
 
+## Computation diagram
+
+```mermaid
+flowchart TD
+    X["Current input x and previous hidden h"] --> G["Sigmoid reset r and update z gates"]
+    G --> R["Reset-before: r * previous h"]
+    X --> R
+    R --> C["tanh candidate from x and reset hidden"]
+    C --> H["New h = z * previous h + (1-z) * candidate"]
+    G --> H
+    X --> H
+    H --> N["Carry hidden to next step"]
+    H --> O["At final step: dense sigmoid head"]
+```
+
+This implementation uses reset-before and weights the old hidden state by z. One hidden state is carried across the sequence; there is no separate cell state. All cells share weights and each call resets the state.
+
 ## How it works
 
 A GRU combines recurrent memory with two gates and a single hidden state. This implementation uses the **reset-before** convention:

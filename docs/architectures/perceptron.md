@@ -1,5 +1,18 @@
 # Perceptron
 
+## Computation diagram
+
+```mermaid
+flowchart TD
+    X["Input features x"] --> S["Weighted sum: w dot x + b"]
+    S --> T["Threshold at zero"] --> Y["Prediction: 0 or 1"]
+    Y --> E["Target minus prediction"]
+    D["Training label"] --> E
+    E -. "mistake update" .-> S
+```
+
+Solid arrows show prediction and error calculation. The dotted arrow changes weights and bias only when the label disagrees with the prediction.
+
 ## How it works
 
 A perceptron learns one linear binary decision boundary. It computes `score = w·x + b` and predicts 1 when `score >= 0`, otherwise 0. It has no hidden layer or differentiable output. For target `t` and prediction `y`, the mistake update is:

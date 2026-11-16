@@ -1,5 +1,18 @@
 # Radial basis function network (RBF)
 
+## Computation diagram
+
+```mermaid
+flowchart TD
+    X["Input vector x"] --> D["Distances to fixed centers"]
+    C["Fixed centers and width"] --> D
+    D --> G["Gaussian similarities"] --> W["Learned output weights + bias"]
+    W --> S["Sigmoid prediction"] --> L["Squared error vs target"]
+    L -. "SGD updates head only" .-> W
+```
+
+The Gaussian layer measures local similarity. Only the output head learns here; training does not move centers or change the width.
+
 ## How it works
 
 An RBF network describes an input by its similarity to a set of centers. A Gaussian feature is close to 1 near its center and decays toward 0 with distance:

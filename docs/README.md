@@ -2,7 +2,7 @@
 
 Start with **Perceptron → MLP → Autoencoder** to understand classification, backpropagation and representation learning. Then explore alternative learning rules with **RBF, SOM and Hopfield**. Finish with **CNN → RNN → LSTM → GRU → Transformer** to study spatial and sequential structure.
 
-This repository implements eleven educational architecture families. Each guide explains the computation, maps it to the actual source, gives a runnable example, and states the implementation's boundaries. These are small working models, not every variant of each family.
+This repository implements eleven educational architecture families. Each guide includes a GitHub-rendered Mermaid computation diagram, explains the computation, maps it to the actual source, gives a runnable example, and states the implementation's boundaries. These are small working models, not every variant of each family.
 
 ## Architecture guides
 
@@ -20,13 +20,14 @@ This repository implements eleven educational architecture families. Each guide 
 - [Encoder-decoder Transformer](architectures/transformer-seq2seq.md): configurable encoder/decoder stacks, causal self-attention, cross-attention, teacher forcing and numerical generation.
 - [Tokenization and text generation](architectures/transformer-text.md): Unicode characters, learned embeddings, categorical loss, EOS and a trained two-layer text example.
 - [File corpus, checkpoints and sampling](architectures/transformer-corpus-checkpoints.md): JSONL/plain text, larger teaching corpus, save/load/resume and varied generation.
+- [Minibatch Adam and resume](architectures/transformer-minibatch-adam.md): averaged gradients, moments, bias correction, v2 checkpoints and an executable resumed-training demo.
 
 ## Shared material
 
 - [Installation and quick start](../README.md#install-and-quick-start).
 - [Original dense API](API.md) and [dense mathematics](MATHEMATICS.md).
 - [Training engine and common contracts](TRAINING.md): shared gradient API, reverse-mode differentiation, ownership, validation and parameter ordering.
-- [Checkpoint format](CHECKPOINT_FORMAT.md): v1 schema, dimensions, integrity and resume metadata.
+- [Checkpoint format](CHECKPOINT_FORMAT.md): v1/v2 schemas, Adam state, dimensions, integrity and resume metadata.
 - [Validation](VALIDATION.md): what the tests establish and what they do not establish.
 - [Implementation log](WORK_LOG.md): actions, reasons and validation evidence.
 
@@ -40,6 +41,7 @@ dotnet run --project examples/Architectures --configuration Release --no-build -
 dotnet run --project examples/Transformer --configuration Release --no-build -- all
 dotnet run --project examples/TextGeneration --configuration Release --no-build
 dotnet run --project examples/CorpusTraining --configuration Release --no-build -- demo
+dotnet run --project examples/CorpusTraining --configuration Release --no-build -- adam-demo
 ```
 
 Use any individual selector: `perceptron`, `mlp`, `rbf`, `hopfield`, `som`, `cnn`, `rnn`, `lstm`, `gru`, `autoencoder`, or `transformer`. Invalid selectors return exit code 2; failed example acceptance checks return 1.

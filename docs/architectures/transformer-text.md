@@ -1,5 +1,24 @@
 # Stacked Transformer and simple text generation
 
+## Computation diagram
+
+```mermaid
+flowchart TD
+    S["Source text"] --> T["Tokenizer: IDs + EOS"] --> E["Source embeddings + positions + encoder stack"]
+    R["Reply IDs ending in EOS"] --> B["Training: shift right with BOS"]
+    I["Inference: BOS + generated prefix IDs"] --> D["Target embeddings + positions"]
+    B --> D
+    D --> A["Decoder stack: causal self-attention, cross-attention, FFN"]
+    E -- "memory keys / values for every decoder layer" --> A
+    A --> L["Vocabulary logits per position"]
+    L --> C["Training: mean token cross-entropy vs reply IDs"]
+    R --> C
+    L --> G["Inference: greedy or temperature / top-k choice"]
+    G --> O["Append chosen ID; repeat with prefix until EOS or capacity"]
+```
+
+During generation the inference branch starts with BOS and receives generated IDs, without the true reply. PAD and BOS cannot be emitted. Encoder/decoder blocks include the attention, FFN, residual and normalization operations described in the numerical guides.
+
 ## How it works
 
 This variant turns text into integer token IDs, looks up learned embeddings, runs configurable encoder/decoder stacks and predicts a vocabulary distribution at every decoder position. It is separate from the numerical sigmoid/MSE API: `TextTransformer` uses **mean categorical cross-entropy**.
@@ -120,16 +139,18 @@ This is learned training-pair memorization; the replies are not returned from a 
 
 `Loss`, `ComputeGradient` and `TrainSample` automatically shift targets and omit PAD suffixes. Targets must have exactly one terminal EOS and no BOS. `Predict` requires a decoder prefix starting with exactly one BOS. `Generate(source, maxNewTokens: n)` requires `1 <= n <= TargetLength`; the cap includes a possible EOS. It returns a detached `TokenGeneration` containing IDs and a termination flag, without BOS. `GetAttentionWeights` returns detached `[layer][head][query][key]` arrays for encoder self, decoder self and cross-attention.
 
-`GetParameters`/`SetParameters` copy finite arrays. Retain the exact vocabulary mapping, dimensions, layer counts and head count with any parameter snapshot. Equal vocabulary sizes can encode entirely different characters. Use [TextCheckpoint](transformer-corpus-checkpoints.md) to save and restore the exact configuration, vocabulary and parameter vector together. It also supports optional completed-epoch metadata for resumed SGD.
+`GetParameters`/`SetParameters` copy finite arrays. Retain the exact vocabulary mapping, dimensions, layer counts and head count with any parameter snapshot. Equal vocabulary sizes can encode entirely different characters. Use [TextCheckpoint](transformer-corpus-checkpoints.md) to save and restore the exact configuration, vocabulary and parameter vector together. It also supports optional completed-epoch metadata and Adam state for resumed training.
 
 ## Validation and limitations
 
 Tests cover Unicode roundtrips, deterministic vocabularies, unknown/special tokens, malformed UTF-16, full numerical gradients through embeddings and two-layer stacks, nonzero gradient signal in every layer, known uniform cross-entropy/logit derivatives, extremely unlikely targets, greedy ranking underflow, EOS/cap behavior, causal attention at every decoder layer, source-memory dependence, PAD invariance, detached arrays, invalid IDs/targets/capacities, seeded updates and atomic overflow rejection. Existing numerical examples remain regression tests.
 
-The tokenizer is character-based and corpus-fitted. The model uses explicit scalar loops and tapes, post-normalization, SGD, greedy decoding and optional seeded temperature/top-k sampling. It has no subword tokenizer, dropout, Adam, minibatches, KV cache, beam search, pretrained weights or a streaming/sharded data pipeline. File-backed corpora and versioned checkpoints are described in [the corpus guide](transformer-corpus-checkpoints.md). More layers increase parameters, allocation and gradient instability; supported depth is not a guarantee of convergence or practical scalability. Use tiny vocabularies, short sequences and independent model instances around concurrent training.
+The tokenizer is character-based and corpus-fitted. The model uses explicit scalar loops and tapes, post-normalization, SGD or minibatch Adam, greedy decoding and optional seeded temperature/top-k sampling. It has no subword tokenizer, dropout, KV cache, beam search, pretrained weights or a streaming/sharded data pipeline. File-backed corpora and versioned checkpoints are described in [the corpus guide](transformer-corpus-checkpoints.md). More layers increase parameters, allocation and gradient instability; supported depth is not a guarantee of convergence or practical scalability. Use tiny vocabularies, short sequences and independent model instances around concurrent training.
 
 The demonstrated width 8 and learning rate 0.03 are validated training settings on macOS and Linux, not universal convergence guarantees. A fixed seed does not make every configuration learn across runtimes.
 
 Further reading: [Attention Is All You Need](https://arxiv.org/abs/1706.03762) for stacked encoder/decoder architecture; [.NET Rune decoding](https://learn.microsoft.com/en-us/dotnet/api/system.text.rune.decodefromutf16?view=net-10.0) for Unicode scalar validation. The tokenizer and teaching corpus are local implementations, not the original paper's subword pipeline.
 
 [Multi-head encoder](transformer.md) · [numerical encoder-decoder](transformer-seq2seq.md) · [documentation index](../README.md).
+
+For minibatch gradients, Adam moments and resumed training, see [the Adam guide](transformer-minibatch-adam.md).

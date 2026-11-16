@@ -1,5 +1,19 @@
 # Multilayer perceptron (MLP)
 
+## Computation diagram
+
+```mermaid
+flowchart TD
+    X["Input layer"] --> H["Dense hidden layers + sigmoid"] --> O["Dense output + sigmoid"]
+    O --> Y["Prediction"]
+    O --> L["Half summed squared error"]
+    T["Target"] --> L
+    L -. "backpropagation + SGD" .-> H
+    L -. "update output weights" .-> O
+```
+
+Each dense arrow connects every activation to every neuron in the next layer. Dotted paths represent training; prediction uses the forward path only.
+
 ## How it works
 
 An MLP is a dense feedforward network: every neuron receives all activations from the preceding layer. A hidden nonlinear layer lets the network represent functions such as XOR that a single linear boundary cannot separate.

@@ -1,5 +1,19 @@
 # Convolutional neural network (CNN)
 
+## Computation diagram
+
+```mermaid
+flowchart TD
+    I["Single-channel image"] --> K["Shared valid 2D kernels + bias"]
+    K --> R["ReLU feature maps"] --> P["Global average pooling per map"]
+    P --> H["Dense sigmoid head"] --> Y["Prediction"]
+    Y --> L["Squared error vs target"]
+    L -. "backpropagation + SGD" .-> K
+    L -. "head gradient" .-> H
+```
+
+One kernel is reused across spatial locations. Pooling reduces each map to one scalar; gradients from all locations accumulate into the shared kernel.
+
 ## How it works
 
 A CNN reuses the same kernel at many positions, so it can learn local spatial features without a separate parameter for every pixel position. This model computes valid 2D **cross-correlation** (the usual operation called convolution in neural networks), applies ReLU, averages each feature map and predicts through a sigmoid head:

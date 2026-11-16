@@ -29,7 +29,7 @@ The tape is recreated for each call, with iterative reverse traversal. It is an 
 
 Linear blocks use Xavier uniform weights with bounds `±sqrt(6/(fanIn+fanOut))` and zero biases. Layer normalization starts with gamma 1 and beta 0. Recurrent gate biases, including LSTM forget biases, start at zero. The same topology, seed, runtime, inputs and training order reproduce results. This is not a cross-runtime serialization guarantee.
 
-Models copy topology, RBF centers and supplied parameter arrays. Predictions, gradients, encodings and snapshots are detached arrays. Caller-owned inputs must not change during a call. Model instances are mutable and require external synchronization around concurrent mutation; otherwise use separate instances. TextTransformer supports the versioned [checkpoint format](CHECKPOINT_FORMAT.md); numerical models still use manual snapshots. There is no momentum/Adam optimizer state, minibatching, clipping, automatic scheduling, regularization or GPU execution.
+Models copy topology, RBF centers and supplied parameter arrays. Predictions, gradients, encodings and snapshots are detached arrays. Caller-owned inputs must not change during a call. Model instances are mutable and require external synchronization around concurrent mutation; otherwise use separate instances. TextTransformer supports the versioned [checkpoint format](CHECKPOINT_FORMAT.md); numerical models still use manual snapshots. Text training now supports mean-gradient minibatches and saved Adam state; numerical `TrainSample` methods retain SGD. There is no clipping, automatic scheduling, regularization or GPU execution.
 
 ## Public boundaries
 
@@ -89,3 +89,12 @@ Text parameter order is source embedding matrix, target embedding matrix (both t
 `TextCorpus` loads strict UTF-8 JSONL prompt/response records or complete Unicode continuation windows. Encoding adds EOS and rejects unknown corpus scalars by default. `TextTraining.TrainEpoch` copies/validates the complete epoch data before updates, then uses a local shuffle RNG seeded with `unchecked(shuffleSeed + epoch)`. An invalid late sample cannot partially apply an epoch, but a numerical failure during successful updates does not roll back prior steps.
 
 `TextCheckpoint` stores weights, exact vocabulary, architecture and optional epoch/rate/shuffle/corpus metadata together. The CLI saves only completed-epoch progress, verifies fingerprints on resume and never refits a loaded vocabulary silently. See [the complete workflow](architectures/transformer-corpus-checkpoints.md). Loss reports average each sample's mean token cross-entropy equally; they are not global token-weighted corpus perplexity.
+
+
+## Minibatch Adam and checkpoint state
+
+The Adam `TextTraining.TrainEpoch` overload averages per-sample mean token gradients at unchanged weights and applies one update per minibatch. A final partial batch uses its actual count. Its returned epoch loss weights each pre-update batch mean by batch sample count; the CLI separately evaluates post-epoch loss. All samples are copied/validated before any update. An arithmetic failure leaves the current batch's parameters and moments unchanged; earlier successful batches in that epoch remain applied in RAM. The saved checkpoint remains the last completed saved epoch.
+
+`AdamOptimizer` binds one model instance and stores copied first/second moments, step and immutable beta/epsilon options. Each step is transactional across weights and moments. Directly replacing model weights while keeping an old optimizer changes the algorithm: restore a paired checkpoint or construct a new optimizer when intentionally restarting. The model and optimizer must be externally synchronized as one unit during concurrent mutation/saving.
+
+Checkpoint v2 includes batch size/optimizer kind in training metadata and optional Adam state; v1 SGD checkpoints remain readable. Resume requires the same corpus/order, epoch, batch size, rate, shuffle seed, parameters, moments and counter for exact same-runtime continuation. See [the didactic Adam guide](architectures/transformer-minibatch-adam.md) and [versioned format](CHECKPOINT_FORMAT.md).

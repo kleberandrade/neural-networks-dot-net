@@ -1,5 +1,18 @@
 # Recurrent neural network (RNN)
 
+## Computation diagram
+
+```mermaid
+flowchart TD
+    Z["h0 = zero"] --> A["tanh cell at step 1"] --> B["Same cell at step 2"] --> C["Same cell through step T"]
+    X1["x1"] --> A
+    X2["x2"] --> B
+    XT["xT"] --> C
+    C --> H["Final hidden state hT"] --> O["Dense sigmoid prediction"]
+```
+
+The arrows between cells carry hidden state, while each step receives its own input. All cells share parameters; BPTT propagates final-output loss backward through the whole sequence. Each call starts from zero.
+
 ## How it works
 
 A recurrent network carries a hidden state from one time step to the next. Sharing the same parameters at every step lets earlier observations affect the final prediction:

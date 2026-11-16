@@ -7,7 +7,7 @@ dotnet build --configuration Release
 dotnet run --project tests/NeuralNetworks.Tests --configuration Release --no-build
 ```
 
-`dotnet test` does not run this suite. CI also runs both original XOR modes, every architecture demo, the multi-head/encoder-decoder example, the two-layer text-generation example, file-backed corpus/checkpoint demo and the formatter on Linux, macOS and Windows.
+`dotnet test` does not run this suite. CI also runs both original XOR modes, every architecture demo, the multi-head/encoder-decoder example, the two-layer text-generation example, file-backed corpus/checkpoint demo, minibatch Adam/resume demo and the formatter on Linux, macOS and Windows.
 
 ## Numerical behavior
 
@@ -53,3 +53,10 @@ Tests reject null/wrong-length/non-finite vectors, invalid topology/kernel/cente
 There is no claimed line/branch coverage percentage, CRAP score, duplication score or comprehensive mutation score. Installed `crapper`, `dryer` and `mutator` do not support C#. Targeted manual mutation experiments, when performed, are recorded separately in [WORK_LOG.md](WORK_LOG.md).
 
 The suite does not establish real-world model quality, large-scale performance, robustness to arbitrary corruption, long-sequence learning, multicore safety, serialized-model compatibility or convergence for all seeds/hyperparameters. Production benchmarking, domain datasets and independent evaluation remain outside this educational repository.
+
+
+## Minibatch Adam
+
+Four additional behavioral groups independently check two-step Adam arithmetic/moment correction, equal sample-gradient averaging at unchanged weights (including unequal target lengths), partial batches, transactional invalid/overflow rejection, model binding and detached optimizer snapshots. Saved/reloaded Adam epochs match uninterrupted weights and moment arrays exactly on the same runtime. Schema tests reject malformed dimensions, options, counters, missing moments and optimizer/progress mismatches even with valid recomputed checksums; a legacy v1 SGD envelope remains readable.
+
+The Adam demo checkpoints/reloads at epoch 150 (step 750), resumes to epoch 300 (step 1,500), and checks the same loss/reply-diversity gates as the SGD corpus demo. All reported output measurements describe training-corpus memorization. Documentation diagrams are rendered and inspected separately; their arrows are explanatory and are not a performance benchmark.

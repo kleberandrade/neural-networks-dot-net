@@ -1,5 +1,21 @@
 # Long short-term memory (LSTM)
 
+## Computation diagram
+
+```mermaid
+flowchart TD
+    X["Current x and previous hidden h"] --> G["Forget f, input i, output o gates; candidate g"]
+    C0["Previous cell state c"] --> C["New cell: f * previous c + i * g"]
+    G --> C --> T["tanh of new cell"]
+    G --> H["New hidden: o * tanh of new cell"]
+    T --> H
+    C --> N["Carry cell state to next step"]
+    H --> R["Carry hidden state to next step"]
+    H --> O["At final step: dense sigmoid head"]
+```
+
+This is one time step; stars mean elementwise multiplication. Both states start at zero for each sequence. The same gates are reused at all steps, and only the final hidden state feeds the prediction head.
+
 ## How it works
 
 An LSTM maintains a cell state `c` as well as hidden state `h`. Gates control what to retain, add and expose. With `u_t = [x_t, h_(t-1)]`:

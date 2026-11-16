@@ -1,5 +1,21 @@
 # Multi-head Transformer encoder
 
+## Computation diagram
+
+```mermaid
+flowchart TD
+    X["Numerical source sequence"] --> P["Feature projection + sinusoidal positions"]
+    P --> A["Encoder layer: multi-head self-attention"]
+    A --> N["Residual add + layer normalization"]
+    N --> F["Positionwise linear / ReLU / linear"]
+    F --> R["Residual add + layer normalization"]
+    R -- "next independently parameterized encoder layer" --> A
+    R -- "after final layer" --> M["Mean pooling over positions"]
+    M --> O["Dense sigmoid prediction"]
+```
+
+The loop means a finite stack, not recurrence with shared parameters. Every encoder position can attend to every source position. Both residual paths add each sublayer input before normalization.
+
 ## How it works
 
 Self-attention lets each position combine information from every position in a numerical sequence. Multiple heads learn separate query/key/value subspaces before their contexts are concatenated. For model width `d` and head count `h`, this implementation uses `headSize = d/h`:

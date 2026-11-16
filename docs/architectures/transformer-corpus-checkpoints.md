@@ -1,8 +1,22 @@
 # Training from files, checkpoints and varied generation
 
+## Computation diagram
+
+```mermaid
+flowchart TD
+    F["UTF-8 JSONL pairs or text file"] --> C["Validate pairs / build continuation windows"]
+    C --> T["Fit tokenizer once; encode with EOS"] --> E["Shuffled training epochs"]
+    E --> S["Checkpoint: weights + vocabulary + architecture + training state"]
+    S --> L["Validate and reload checkpoint"]
+    L -- "same corpus and saved training settings" --> E
+    L --> G["Generate without original corpus"] --> O["Decoded reply and EOS status"]
+```
+
+For Adam, the checkpoint also contains moments and the step counter; the minibatch guide explains that update path. Resuming keeps the loaded vocabulary fixed. Checkpoint arrows represent saved snapshots, not a differentiable part of the network.
+
 ## What this adds
 
-The token Transformer can now train from a local UTF-8 corpus, save its exact vocabulary/configuration/weights together, reload for inference without retraining, and resume SGD at an epoch boundary. Temperature/top-k sampling complements the existing deterministic greedy decoder.
+The token Transformer can now train from a local UTF-8 corpus, save its exact vocabulary/configuration/weights together, reload for inference without retraining, and resume SGD or minibatch Adam at an epoch boundary. Temperature/top-k sampling complements the existing deterministic greedy decoder.
 
 This is a larger **teaching** example: the bundled JSONL corpus has 20 records, 17 distinct prompts and 16 distinct replies. It remains a small scalar implementation. File support does not turn it into an optimized large-language-model training system.
 
@@ -106,7 +120,7 @@ This trains character-span continuation, not guaranteed complete sentences. Corp
 dotnet run --project examples/CorpusTraining -- resume --corpus examples/CorpusTraining/Data/words.jsonl --checkpoint artifacts/words.json --epochs 100
 ```
 
-`--epochs` means **additional** epochs on resume. Architecture, tokenizer and capacities come from the artifact. Progress stores completed epoch count, shuffle seed, learning rate and corpus fingerprint. With the same sample order/content, runtime and settings, resuming at a saved epoch boundary matches uninterrupted SGD. There is no momentum/Adam state to restore. A failure within an epoch can leave earlier steps applied in RAM; the file remains the last completed saved checkpoint, not a partial epoch.
+`--epochs` means **additional** epochs on resume. Architecture, tokenizer and capacities come from the artifact. Progress stores completed epoch count, shuffle seed, learning rate and corpus fingerprint. With the same sample order/content, runtime and settings, resuming at a saved epoch boundary matches uninterrupted SGD. That SGD path has no optimizer buffers; [the Adam path](transformer-minibatch-adam.md) restores moments and the step counter as well. A failure within an epoch can leave earlier steps applied in RAM; the file remains the last completed saved checkpoint, not a partial epoch.
 
 Changed corpus fingerprints are rejected by default. `--new-corpus` explicitly retains weights and resets epoch ordering/progress for a new dataset. The tokenizer remains frozen: unknown corpus characters or over-capacity fields still fail. Fit a new model/vocabulary for new characters, or explicitly use the library's `Encode(..., allowUnknown: true)` if mapping them to UNK is intended. The CLI does not silently expand vocabulary or replace characters. Repeat the same text-window settings when resuming plain-text training.
 
@@ -139,6 +153,8 @@ Tests cover strict UTF-8/JSONL, Unicode windows, limits/unknown data, vocabulary
 
 The default checkpoint loader limits are 32 MiB, one million parameters, 65,536 vocabulary IDs, 4,096 tokens per side and 64 layers per stack. Limits are checked before model construction. The SHA-256 checksum detects accidental corruption; it is not an authenticity signature. Save uses same-directory temporary output and rename, with failed temporary files cleaned up; filesystem/power-loss durability is not a backup strategy. Numerical models outside `TextTransformer` still have no standard checkpoint format.
 
-The corpus is fully materialized under its limits, not streamed/sharded training. There is no optimizer beyond SGD, batch/tensor acceleration, incremental vocabulary growth, KV cache or long-context language-model quality guarantee. A larger input file can require substantial CPU time in scalar loops. Use small dimensions/contexts, measure loss and generated outputs, and keep a separate evaluation corpus for any real generalization claims.
+The corpus is fully materialized under its limits, not streamed/sharded training. SGD and minibatch Adam are available, without batch/tensor acceleration, incremental vocabulary growth, KV cache or long-context language-model quality guarantee. A larger input file can require substantial CPU time in scalar loops. Use small dimensions/contexts, measure loss and generated outputs, and keep a separate evaluation corpus for any real generalization claims.
 
 [Text Transformer](transformer-text.md) · [checkpoint format](../CHECKPOINT_FORMAT.md) · [all guides](../README.md).
+
+[Minibatch Adam and optimizer checkpoints](transformer-minibatch-adam.md) extends the same corpus workflow with saved moments and batch settings.

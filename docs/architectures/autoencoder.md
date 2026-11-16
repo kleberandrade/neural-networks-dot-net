@@ -1,5 +1,19 @@
 # Autoencoder
 
+## Computation diagram
+
+```mermaid
+flowchart TD
+    X["Input x in range 0 to 1"] --> E["Encoder: dense + sigmoid"]
+    E --> Z["Bottleneck representation"] --> D["Decoder: dense + sigmoid"]
+    D --> R["Reconstruction"] --> L["Squared reconstruction error"]
+    X --> L
+    L -. "joint backpropagation + SGD" .-> E
+    L -. "decoder gradient" .-> D
+```
+
+The input itself supplies the training target. The bottleneck compresses the representation; encoder and decoder have independent learned weights.
+
 ## How it works
 
 An autoencoder learns to reconstruct its input through a smaller internal representation. The target is the input itself, so no separate class labels are needed:

@@ -1,5 +1,20 @@
 # Hopfield network
 
+## Computation diagram
+
+```mermaid
+flowchart TD
+    P["Stored bipolar patterns"] --> H["Hebbian fit: symmetric weights, zero diagonal"]
+    Q["Noisy bipolar query"] --> C["Copy query state"]
+    H --> U["Update one neuron by weighted-field sign"]
+    C --> U --> S{"Full sweep unchanged?"}
+    S -- "yes" --> R["Return stable state: converged"]
+    S -- "no, sweeps remain" --> U
+    S -- "no, limit reached" --> B["Return current state: not converged"]
+```
+
+Recall changes the query copy one neuron at a time using fixed stored weights. A stable state can be a spurious memory; convergence does not prove the intended pattern was recovered.
+
 ## How it works
 
 A Hopfield network is an associative memory. Rather than mapping inputs to labels, it stores bipolar patterns and updates a noisy pattern toward a stable state. Every component must be `-1` or `+1`.
