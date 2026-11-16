@@ -7,7 +7,7 @@ dotnet build --configuration Release
 dotnet run --project tests/NeuralNetworks.Tests --configuration Release --no-build
 ```
 
-`dotnet test` does not run this suite. CI also runs both original XOR modes, every architecture demo, the multi-head/encoder-decoder example and the formatter on Linux, macOS and Windows.
+`dotnet test` does not run this suite. CI also runs both original XOR modes, every architecture demo, the multi-head/encoder-decoder example, the two-layer text-generation example and the formatter on Linux, macOS and Windows.
 
 ## Numerical behavior
 
@@ -19,7 +19,9 @@ dotnet run --project tests/NeuralNetworks.Tests --configuration Release --no-bui
 
 - **Encoder-decoder:** every trainable parameter against numerical gradients, including masked objectives; future decoder inputs cannot change earlier predictions; padded features/targets cannot alter valid predictions, loss or gradients; masked attention weights are zero; cross-attention depends on source memory. Checks also cover unequal source/target lengths, multiple features, mask validation, repeatability and atomic overflow rejection.
 
-For the tape models, central finite differences perturb each trainable parameter by `h = 1e-5` and compare with an absolute tolerance of `2e-6`. The dense test uses `1e-8`; the extended multi-head/encoder-decoder tests use `3e-6`. Inputs are deliberately moderate and avoid ReLU kinks. Gradients and finite differences can both be misleading around a nondifferentiable point; this suite does not claim all-input numerical equivalence.
+- **Stacked/text Transformer:** numerical gradients through two encoder and two decoder layers and learned embeddings; nonzero signal in every layer; deterministic Unicode vocabularies, emoji roundtrips and invalid UTF-16; known uniform categorical loss/derivatives and extreme-logit stability; causal attention at every decoder layer, source dependence, PAD invariance, detached snapshots and invalid token/target/depth rejection. Greedy generation tests EOS termination, length caps, exclusion of structural tokens and ranking underflow. The trained text test requires exact greedy replies with EOS for two synthetic prompts.
+
+For the tape models, central finite differences perturb each trainable parameter by `h = 1e-5` and compare with an absolute tolerance of `2e-6`. The dense test uses `1e-8`; the extended multi-head/encoder-decoder tests use `3e-6`; stacked numerical/token-model checks use `5e-6`. Inputs are deliberately moderate and avoid ReLU kinks. Gradients and finite differences can both be misleading around a nondifferentiable point; this suite does not claim all-input numerical equivalence.
 
 ## Learning behavior
 
@@ -33,6 +35,7 @@ The fixtures use deterministic synthetic data and fixed seeds, with no external 
 - RNN, LSTM and GRU remember a first-step bit after two zero-input steps.
 - Autoencoder reconstructs two complementary patterns through one latent unit.
 - Transformer encoder distinguishes two small numerical sequences.
+- A character-token model with two encoder/two decoder layers memorizes `a → ola` and `b → oi`, including EOS. Its mean token cross-entropy must fall below one tenth of its initial value; outputs must match both training replies exactly.
 - A two-head encoder-decoder learns two-bit reversal using teacher forcing, then generates all four reversed sequences autoregressively without target inputs. Its target-length-two loss must fall below one tenth of the initial value and generated outputs must be within 0.2 of the reverse targets.
 
 Gradient demos require mean loss below one fifth of initial loss and every output within 0.2 of its target. The original XOR example has its stricter 0.08 output threshold. These thresholds concern training fixtures, not held-out generalization. A failing CNN fixture with uncentered inputs exposed inactive ReLU filters; the guide records this limitation, and the executable example uses centered inputs.

@@ -16,7 +16,7 @@ prediction = sigmoid(OutputHead(mean_over_positions(Z)))
 
 Each head uses its own contiguous coordinates of the full-width Q/K/V projections. These projection rows are independent learned parameters. The softmax is separate for each query and head. Concatenation preserves each head's coordinates; heads are not averaged. Changing the head count changes how those coordinates interact, even though the number of projection parameters stays the same.
 
-The positionwise FFN is linear → ReLU → linear. Layer normalization uses learned gamma/beta and epsilon `1e-5`, after each residual addition. The encoder is bidirectional: every source position can attend to all source positions.
+The positionwise FFN is linear → ReLU → linear. Layer normalization uses learned gamma/beta and epsilon `1e-5`, after each residual addition. The encoder is bidirectional: every source position can attend to all source positions. Its configurable stack repeats this computation with independent parameters in every layer; the final layer is pooled for prediction.
 
 ## How it was programmed
 
@@ -50,10 +50,22 @@ Inputs remain finite, flat, time-major numerical features, with length `sequence
 
 Tests cover independently calculated per-head scores, scaling by `sqrt(headSize)`, concatenated-context output, every parameter's numerical gradient, head validation, detached snapshots, deterministic training and the original single-head regression cases.
 
-This class is one encoder block with a pooled prediction head. For causal decoding, source/target padding, teacher forcing and generation, use [TransformerSequenceToSequence](transformer-seq2seq.md). The standalone pooled encoder API processes every input position; it does not take a padding mask.
+This class is a configurable encoder stack with a pooled prediction head. Optional `layerCount` defaults to one; `LayerCount` reports the depth. `GetLayerAttentionWeights(input)` returns `[layer][head][query][key]`; existing head inspection methods accept an optional `layerIndex` defaulting to zero. For causal decoding, source/target padding, teacher forcing and generation, use [TransformerSequenceToSequence](transformer-seq2seq.md). The standalone pooled encoder API processes every input position; it does not take a padding mask.
 
-There are no configurable encoder stacks, dropout, pretrained weights, tokenization or optimized tensor kernels. Numerical outputs use sigmoid and squared error. Attention remains quadratic in sequence length, and scalar tapes are suitable only for small examples. Saving parameters requires also retaining dimensions and head count; a vector does not encode its attention layout.
+This numerical class has no dropout, pretrained weights or tokenization. For learned token embeddings, categorical loss and generated text, use [TextTransformer](transformer-text.md). Optimized tensor kernels are not implemented. Numerical outputs use sigmoid and squared error. Attention remains quadratic in sequence length, and scalar tapes are suitable only for small examples. Saving parameters requires also retaining dimensions, layer count and head count; a vector does not encode its attention layout.
 
 Further reading: [Attention Is All You Need](https://arxiv.org/abs/1706.03762). The implementation follows the multi-head encoder computation with a small numerical prediction head.
 
 Next: [encoder-decoder Transformer](transformer-seq2seq.md) · [all architecture guides](../README.md).
+
+## Configuring multiple encoder layers
+
+```csharp
+using NeuralNetworks;
+
+var stacked = new TransformerEncoder(2, 1, 4, 1, seed: 42, headCount: 2, layerCount: 2);
+var output = stacked.Predict([0.2, 0.7]);
+var attention = stacked.GetLayerAttentionWeights([0.2, 0.7]);
+```
+
+The first layer retains the original parameter ordering, including the pooled head's legacy slot; additional encoder blocks are appended after it. Extra blocks use Q/K/V/output, attention normalization, FFN input/output and FFN normalization order. Existing one-layer source calls and snapshots keep their behavior. See the [text example](transformer-text.md) for a trained two-encoder/two-decoder stack.

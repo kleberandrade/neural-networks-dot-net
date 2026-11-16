@@ -23,7 +23,7 @@ Every guide explains **how the network works, how it was programmed, how to use 
 - [LSTM](docs/architectures/lstm.md): forget/input/output gates and a separate cell state.
 - [GRU](docs/architectures/gru.md): reset-before recurrent gating.
 - [Autoencoder](docs/architectures/autoencoder.md): sigmoid bottleneck and reconstruction.
-- [Transformer](docs/architectures/transformer.md): multi-head encoder plus an [encoder-decoder](docs/architectures/transformer-seq2seq.md) with causal attention, cross-attention, padding and autoregressive generation.
+- [Transformer](docs/architectures/transformer.md): multi-head encoder plus an [encoder-decoder](docs/architectures/transformer-seq2seq.md) with configurable encoder/decoder stacks, causal attention, cross-attention, padding and autoregressive generation. [TextTransformer](docs/architectures/transformer-text.md) adds Unicode character tokenization, embeddings and categorical text generation.
 
 Start with the [learning path and documentation index](docs/README.md). [Common training contracts](docs/TRAINING.md) explain parameter ordering and the small reverse-mode tape used by the newer gradient models. The MLP keeps its separate, explicit backpropagation implementation. These are specific educational variants, not every architecture or feature of a production framework.
 
@@ -100,6 +100,16 @@ dotnet run --project examples/Transformer -- seq2seq
 
 The new example trains a two-head encoder and an encoder-decoder that reverses two-bit numerical sequences. It verifies free-running generation using only source and BOS, separately from teacher-forced training. See the [multi-head guide](docs/architectures/transformer.md) and [encoder-decoder guide](docs/architectures/transformer-seq2seq.md) for equations, code structure, masks and usage.
 
+### Tokenization and text generation
+
+```sh
+dotnet run --project examples/TextGeneration
+# Optional one-character prompt after training:
+dotnet run --project examples/TextGeneration -- b
+```
+
+This example trains two encoder layers and two decoder layers on `a → ola` and `b → oi`, then generates token IDs greedily until EOS. It checks exact reproduction of both training replies and a reduction in mean token cross-entropy. See [the didactic text-generation guide](docs/architectures/transformer-text.md) for Unicode vocabulary fitting, learned embeddings, stacked attention, shifted targets, PAD/BOS/EOS/UNK and limitations. It demonstrates tiny-corpus memorization.
+
 ## Tests and CI
 
 ```sh
@@ -109,6 +119,7 @@ dotnet run --project examples/Xor --configuration Release --no-build -- train
 dotnet run --project examples/Xor --configuration Release --no-build -- infer
 dotnet run --project examples/Architectures --configuration Release --no-build -- all
 dotnet run --project examples/Transformer --configuration Release --no-build -- all
+dotnet run --project examples/TextGeneration --configuration Release --no-build
 dotnet format --verify-no-changes --no-restore
 ```
 
@@ -120,8 +131,8 @@ The test project is a package-free executable that prints each result and exits 
 
 See the [individual architecture guides](docs/README.md), [common contracts](docs/TRAINING.md), [dense mathematics](docs/MATHEMATICS.md) and [dense API](docs/API.md).
 
-- The models implement the specific variants listed above. CNN has one input channel/stage. RNN/LSTM/GRU use fixed lengths and final outputs; the Transformer encoder-decoder produces a vector at every target position. Transformer supports one multi-head encoder block and one causal decoder block. Numerical sequence generation is supported; tokenization and vocabulary-based language modeling are outside this implementation.
-- All gradient heads are sigmoid with half summed squared-error loss. RBF centers and width are fixed; Perceptron, Hopfield and SOM use their own learning rules.
+- The models implement the specific variants listed above. CNN has one input channel/stage. RNN/LSTM/GRU use fixed lengths and final outputs; the Transformer encoder-decoder produces a vector at every target position. Transformer supports configurable multi-head encoder/decoder stacks. Numerical sequence prediction and character-token text generation have separate APIs and objectives.
+- The numerical `IGradientNetwork` models use sigmoid heads and half summed squared-error loss. `TextTransformer` uses learned token embeddings, vocabulary logits/softmax and mean categorical cross-entropy. RBF centers and width are fixed; Perceptron, Hopfield and SOM use their own learning rules.
 - Sequential per-sample SGD only. Data preparation, normalization, shuffling, evaluation splits and stopping criteria belong to the caller. Seeds and learning rates affect convergence. Sigmoid can saturate, ReLU filters can become inactive, and sequence gradients can vanish or explode.
 - Finite inputs can still overflow arithmetic. Rejected steps preserve model parameters. Instances require synchronization around concurrent mutation.
 - Explicit scalar loops and temporary graphs favor readability over speed. There is no GPU execution, optimized tensor backend, minibatch optimizer, gradient clipping or model persistence format. Use tiny datasets and short sequences.

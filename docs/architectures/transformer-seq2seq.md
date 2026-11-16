@@ -4,7 +4,7 @@
 
 An encoder-decoder maps a source sequence to an output sequence. The encoder produces one memory vector per source position. The decoder uses two kinds of attention: causal self-attention over its earlier inputs, and cross-attention whose keys/values come from encoder memory.
 
-For one encoder block and one decoder block:
+For each encoder/decoder block (repeat with independent parameters for the configured depth):
 
 ```text
 source = ProjectSource(sourceFeatures) + positions
@@ -48,11 +48,11 @@ The objective is `½ Σ_valid_positions Σ_features (output-target)²`. It is su
 
 ## How it was programmed
 
-[TransformerSequenceToSequence.cs](../../src/NeuralNetworks/TransformerSequenceToSequence.cs) composes an encoder layer, causal decoder self-attention, cross-attention and a decoder FFN. The decoder's cross-attention queries come from the normalized decoder state; its keys/values come from encoder outputs. Both encoder and decoder parameters participate in one loss graph.
+[TransformerSequenceToSequence.cs](../../src/NeuralNetworks/TransformerSequenceToSequence.cs) composes configurable encoder and decoder stacks. [TransformerStacks.cs](../../src/NeuralNetworks/Internal/TransformerStacks.cs) iterates every layer and shares decoder causal self-attention, cross-attention and FFN computation with the token model. The decoder's cross-attention queries come from the normalized decoder state; its keys/values come from encoder outputs. All encoder and decoder layers participate in one loss graph. Every decoder cross-attention reads the final encoder layer output.
 
 [MultiHeadAttention.cs](../../src/NeuralNetworks/Internal/MultiHeadAttention.cs) handles all three attention stages; [TransformerLayers.cs](../../src/NeuralNetworks/Internal/TransformerLayers.cs) shares embedding, residual, FFN and padding validation. The [training engine](../TRAINING.md) accepts per-call forward functions and output masks, avoiding mutable mask/context fields. Padding arrays are validated and copied per call. A failed training step never partially updates parameters.
 
-Construction order is source projection, target projection, encoder Q/K/V/output projection, encoder attention normalization, encoder FFN input/output/normalization, decoder self Q/K/V/output projection and normalization, cross Q/K/V/output projection and normalization, decoder FFN input/output/normalization, then final output head. Linear blocks store each neuron's weights then bias; normalizations store gamma then beta. Head count changes attention layout without adding parameter slots.
+Construction order is source projection, target projection, every encoder block, every decoder block, then the final head. Each encoder block stores Q/K/V/output projection, attention normalization, FFN input/output and FFN normalization. Each decoder block stores self Q/K/V/output and normalization, cross Q/K/V/output and normalization, then FFN input/output and normalization. Linear blocks store neuron weights followed by bias; normalization stores gamma then beta. Head count changes attention layout without adding parameter slots. Depth adds independent blocks and must accompany parameter snapshots.
 
 ## How to use it
 
@@ -116,8 +116,22 @@ The inherited `IGradientNetwork` interface remains available for unmasked sample
 
 Tests check independently calculated head scores and concatenation, full parameter gradients, masked gradients, causal future independence, cross-attention dependence on source memory, padding invariance in predictions/loss/gradients, detached attention matrices, deterministic updates, invalid dimensions/masks/values and atomic overflow rejection. A learning test checks **autoregressive** reversal, not just teacher-forced predictions.
 
-This is one encoder block and one decoder block with numerical features and sigmoid/MSE outputs. It has no vocabulary embeddings, tokenization, softmax vocabulary loss, text generation, learned EOS, beam search, KV cache, stacked-block configuration, dropout, batch optimization or pretrained weights. Source and target capacities are fixed at construction; padding accommodates shorter valid prefixes. Attention is quadratic in sequence lengths and the scalar tape is intentionally allocation-heavy. Use short sequences and small dimensions.
+This numerical API supports configurable encoder/decoder stacks with sigmoid/MSE outputs. Optional `encoderLayerCount` and `decoderLayerCount` default to one, preserving earlier source calls and one-layer parameter ordering. For vocabulary embeddings, tokenization, categorical loss and EOS-based text generation, use [TextTransformer](transformer-text.md). This numerical class has no beam search, KV cache, dropout, batch optimization or pretrained weights. Source and target capacities are fixed at construction; padding accommodates shorter valid prefixes. Attention is quadratic in sequence lengths and the scalar tape is intentionally allocation-heavy. Use short sequences and small dimensions.
 
 Further reading: [Attention Is All You Need](https://arxiv.org/abs/1706.03762), particularly the encoder/decoder, multi-head attention and shifted decoder input sections. This project implements those core interactions in a small numerical teaching model.
 
 [Multi-head encoder guide](transformer.md) · [training engine](../TRAINING.md) · [documentation index](../README.md).
+
+## Configuring multiple encoder and decoder layers
+
+```csharp
+using NeuralNetworks;
+
+var stacked = new TransformerSequenceToSequence(2, 2, 1, 1, seed: 42,
+    encoderLayerCount: 2, decoderLayerCount: 2);
+var output = stacked.Predict([0.2, 0.7], [0.5, 0.3]);
+var layers = stacked.GetLayerAttentionWeights([0.2, 0.7], [0.5, 0.3]);
+// layers.DecoderSelf[layer][head][query][key]
+```
+
+Each layer uses independent Q/K/V, output, FFN and normalization parameters. `GetAttentionWeights` retains its three-dimensional snapshots by selecting encoder/decoder layer zero by default; optional `encoderLayerIndex` and `decoderLayerIndex` select others. `GetLayerAttentionWeights` returns all layers. Numeric padding and causal rules apply in every layer. For actual text generation with a two-layer stack, see [the token guide](transformer-text.md).

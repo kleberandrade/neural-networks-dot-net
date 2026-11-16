@@ -17,7 +17,8 @@ This repository implements eleven educational architecture families. Each guide 
 - [Gated recurrent unit](architectures/gru.md): update/reset gates and a single state.
 - [Autoencoder](architectures/autoencoder.md): an encoder bottleneck and reconstruction.
 - [Multi-head Transformer encoder](architectures/transformer.md): independent attention heads, positions, residuals and normalization.
-- [Encoder-decoder Transformer](architectures/transformer-seq2seq.md): causal self-attention, cross-attention, teacher forcing, padding and generation.
+- [Encoder-decoder Transformer](architectures/transformer-seq2seq.md): configurable encoder/decoder stacks, causal self-attention, cross-attention, teacher forcing and numerical generation.
+- [Tokenization and text generation](architectures/transformer-text.md): Unicode characters, learned embeddings, categorical loss, EOS and a trained two-layer text example.
 
 ## Shared material
 
@@ -35,6 +36,7 @@ From the repository root with the .NET 10 SDK installed:
 dotnet build --configuration Release
 dotnet run --project examples/Architectures --configuration Release --no-build -- all
 dotnet run --project examples/Transformer --configuration Release --no-build -- all
+dotnet run --project examples/TextGeneration --configuration Release --no-build
 ```
 
 Use any individual selector: `perceptron`, `mlp`, `rbf`, `hopfield`, `som`, `cnn`, `rnn`, `lstm`, `gru`, `autoencoder`, or `transformer`. Invalid selectors return exit code 2; failed example acceptance checks return 1.

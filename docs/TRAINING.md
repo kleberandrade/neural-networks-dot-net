@@ -2,7 +2,7 @@
 
 ## Two ways to see backpropagation
 
-`DenseNetwork` keeps the explicit layer-by-layer derivative calculation described in [MATHEMATICS.md](MATHEMATICS.md). The newer differentiable models inherit `GradientNetwork`, which evaluates their scalar operations on a small reverse-mode differentiation tape. Both implement `IGradientNetwork` and use the same half sum of squared errors:
+`DenseNetwork` keeps the explicit layer-by-layer derivative calculation described in [MATHEMATICS.md](MATHEMATICS.md). The newer differentiable models inherit `GradientNetwork`, which evaluates their scalar operations on a small reverse-mode differentiation tape. Both numerical model paths implement `IGradientNetwork` and use the same half sum of squared errors:
 
 ```text
 E = ½ Σ_j (prediction_j - target_j)²
@@ -35,7 +35,7 @@ Models copy topology, RBF centers and supplied parameter arrays. Predictions, gr
 
 - Dimensions must be positive. Products/counts use checked indexing arithmetic. Huge allocations can still exhaust memory.
 - Inputs and parameters must have the exact required length and contain finite doubles.
-- All gradient models use sigmoid heads and targets in `[0, 1]`. Outputs are independent, not a softmax class distribution. RBF centers/width are fixed hyperparameters.
+- All models implementing `IGradientNetwork` use sigmoid heads and targets in `[0, 1]`. Outputs are independent, not a softmax class distribution. RBF centers/width are fixed hyperparameters.
 - A learning rate must be finite and positive. It has no convergence guarantee.
 - Non-finite sums, products, tape values, derivatives or candidate updates throw `ArithmeticException`. Invalid arguments throw `ArgumentException` or a more specific subtype. Failed gradient/perceptron/SOM updates leave parameters unchanged; failed Hopfield fitting preserves the previous memory bank.
 - Evaluation is stateless across calls. Recurrent state starts at zero for every sample; RNN/LSTM/GRU have no streaming or masking API. TransformerSequenceToSequence supports explicit source/target padding masks and causal decoder attention, with a fresh graph and copied masks per call.
@@ -75,3 +75,11 @@ The executable tour uses this contract and checks actual loss reduction. Dataset
 ## Masked sequence objectives
 
 The encoder-decoder uses the same SGD engine with a per-call forward function and a Boolean output-loss mask. Target-padding positions are omitted from the half summed squared-error objective; the loss is not normalized by valid token count. The forward closure holds only validated, copied masks for that call, so there is no mutable model-wide mask context. The typed source/decoder overloads validate both vectors, masks and targets before committing updates. The inherited flat interface remains unmasked; see the [shape contract](architectures/transformer-seq2seq.md#api-and-shapes).
+
+## Stacks and categorical token training
+
+`ParameterizedModel` now owns seeded parameter allocation, copied snapshots, derivative extraction and atomic SGD updates. `GradientNetwork` retains its numerical sigmoid/MSE interface; `TextTransformer` inherits parameter ownership without implementing that different interface. The text model supplies integer IDs, learned source/target embeddings, per-position vocabulary logits and mean categorical cross-entropy, including EOS and excluding trailing PAD. Its target shifting is automatic. See [the complete guide](architectures/transformer-text.md).
+
+`TransformerBuilder` allocates fresh parameters per layer; `TransformerStacks` sends source through every encoder and decoder state through every decoder. All decoder cross-attention uses the final encoder memory. Causal masks remain active at every decoder layer. The numerical classes default to one layer for source compatibility; the text model defaults to two encoder/two decoder layers. Depth, head count and the exact vocabulary mapping must accompany text parameter snapshots.
+
+Text parameter order is source embedding matrix, target embedding matrix (both token-major), every encoder layer, every decoder layer, then vocabulary head. Encoder/decoder block order is documented in the architecture guides. The numerical pooled encoder preserves its original first-layer/head slots and appends additional layers afterward. The numerical sequence model allocates all encoders before all decoders and its final head. These models provide no checkpoint file format.
