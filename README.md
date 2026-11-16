@@ -5,9 +5,27 @@
 [![MIT license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![CI](https://github.com/kleberandrade/neural-networks-dot-net/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kleberandrade/neural-networks-dot-net/actions/workflows/ci.yml)
 
-A small educational library that implements a dense feedforward neural network from scratch. Read the complete forward pass, backpropagation and stochastic gradient descent in [one class](src/NeuralNetworks/DenseNetwork.cs), then run XOR to see the network learn a nonlinear function.
+Eleven small neural-network architecture families implemented from scratch in C#/.NET: classical classifiers, associative memory, competitive learning, spatial models and sequence models. Each has working code, a runnable example and an educational guide. The default branch is `main`.
 
 This is a learning project, with explicit loops and `double` arrays. It is not a production machine-learning framework.
+
+## Supported networks and learning guides
+
+Every guide explains **how the network works, how it was programmed, how to use it, and its tested limitations**:
+
+- [Perceptron](docs/architectures/perceptron.md): binary linear classification with the mistake rule.
+- [MLP / dense feedforward](docs/architectures/mlp.md): sigmoid layers with explicit backpropagation; learns XOR.
+- [RBF](docs/architectures/rbf.md): fixed Gaussian centers and width with a trained sigmoid head.
+- [Hopfield](docs/architectures/hopfield.md): bipolar associative memory with Hebbian fitting and asynchronous recall.
+- [SOM](docs/architectures/som.md): unsupervised rectangular Kohonen map.
+- [CNN](docs/architectures/cnn.md): single-channel valid 2D kernels, ReLU and global average pooling.
+- [RNN](docs/architectures/rnn.md): tanh recurrence with full backpropagation through time.
+- [LSTM](docs/architectures/lstm.md): forget/input/output gates and a separate cell state.
+- [GRU](docs/architectures/gru.md): reset-before recurrent gating.
+- [Autoencoder](docs/architectures/autoencoder.md): sigmoid bottleneck and reconstruction.
+- [Transformer encoder](docs/architectures/transformer.md): one single-head encoder block with positions, residuals, normalization and FFN.
+
+Start with the [learning path and documentation index](docs/README.md). [Common training contracts](docs/TRAINING.md) explain parameter ordering and the small reverse-mode tape used by the newer gradient models. The MLP keeps its separate, explicit backpropagation implementation. These are specific educational variants, not every architecture or feature of a production framework.
 
 ## Requirements
 
@@ -24,10 +42,10 @@ git clone https://github.com/kleberandrade/neural-networks-dot-net.git
 cd neural-networks-dot-net
 dotnet restore
 dotnet build --configuration Release --no-restore
-dotnet run --project examples/Xor --configuration Release --no-build -- train
+dotnet run --project examples/Architectures --configuration Release --no-build -- all
 ```
 
-The seeded `2 → 4 → 1` network trains for 10,000 epochs, taking four SGD steps per epoch in a fixed order. A validated run with SDK 10.0.404 produced:
+To run only the original XOR example, use `dotnet run --project examples/Xor -- train`. The seeded `2 → 4 → 1` network trains for 10,000 epochs, taking four SGD steps per epoch in a fixed order. A validated run with SDK 10.0.404 produced:
 
 ```text
 Initial mean loss: 0.135352
@@ -59,9 +77,12 @@ var preUpdateLoss = network.TrainSample(input, target, learningRate: 0.5);
 var prediction = network.Predict(input); // detached double[]
 ```
 
-Call `TrainSample` repeatedly over your dataset. A single call performs one gradient step; it does not fit a dataset or guarantee convergence. All layers, including the output, use sigmoid activations. Inputs must be finite; targets must be finite and within `[0, 1]`.
+Call `TrainSample` repeatedly over your dataset. A single call performs one gradient step; it does not fit a dataset or guarantee convergence. This MLP uses sigmoid in every layer. The other gradient models have architecture-specific internal activations and a sigmoid head. They share `IGradientNetwork`; inputs must be finite and targets in `[0, 1]`. Perceptron, Hopfield and SOM have their own learning APIs, described in their guides.
 
 ## Examples
+
+Run the whole tour with `dotnet run --project examples/Architectures -- all`, or choose `perceptron`, `mlp`, `rbf`, `hopfield`, `som`, `cnn`, `rnn`, `lstm`, `gru`, `autoencoder` or `transformer`. Each example checks an actual outcome and returns nonzero on failure. See [the example source](examples/Architectures/Program.cs).
+
 
 - **Learning XOR:** `dotnet run --project examples/Xor -- train` trains from seeded random weights and prints mean loss before and after training.
 - **Inference only:** `dotnet run --project examples/Xor -- infer` loads explicitly constructed illustrative XOR parameters and predicts without training. These parameters are not a saved training result.
@@ -75,25 +96,25 @@ dotnet build --configuration Release
 dotnet run --project tests/NeuralNetworks.Tests --configuration Release --no-build
 dotnet run --project examples/Xor --configuration Release --no-build -- train
 dotnet run --project examples/Xor --configuration Release --no-build -- infer
+dotnet run --project examples/Architectures --configuration Release --no-build -- all
 dotnet format --verify-no-changes --no-restore
 ```
 
-The test project is a package-free executable that prints each result and exits nonzero on failure. **`dotnet test` does not run this suite.** Tests cover known forward arithmetic, finite differences for every weight and bias, multiple hidden layers and outputs, loss reduction, XOR learning, deterministic seeding, array ownership, invalid dimensions/values, sigmoid saturation and atomic overflow rejection.
+The test project is a package-free executable that prints each result and exits nonzero on failure. **`dotnet test` does not run this suite.** Tests cover known forward/convolution/gate/attention arithmetic; finite differences for every trainable parameter in every gradient architecture, including multiple outputs; loss reduction and small learning tasks; AND/XOR, Hopfield recall/energy and SOM neighborhoods; deterministic initialization, array ownership, invalid inputs and atomic overflow rejection. See [validation details](docs/VALIDATION.md).
 
 [CI](.github/workflows/ci.yml) runs these commands on Linux, macOS and Windows. Local validation is recorded in [the implementation log](docs/WORK_LOG.md). The installed ub-mode quality tools do not support C#, so no automated CRAP, duplication, coverage or mutation score is reported.
 
 ## Design and limitations
 
-See [mathematics and glossary](docs/MATHEMATICS.md) and [API details](docs/API.md).
+See the [individual architecture guides](docs/README.md), [common contracts](docs/TRAINING.md), [dense mathematics](docs/MATHEMATICS.md) and [dense API](docs/API.md).
 
-- Dense layers only; sigmoid and half squared-error loss only. No softmax, convolution, automatic differentiation engine, mini-batch optimizer or GPU support.
-- Sequential per-sample SGD. Dataset iteration, normalization, validation splits, stopping criteria and shuffling belong to the caller. Learning rates and seeds affect convergence.
-- Sigmoid can saturate and produce vanishing gradients. Use appropriately scaled inputs; this API does not normalize them.
-- Finite values can still overflow during arithmetic. Such operations throw `ArithmeticException`; a rejected training step leaves the model unchanged.
-- Each evaluation allocates arrays for clarity. Training mutates the network. An instance must not be trained, updated or read concurrently with mutation; use independent instances or external synchronization.
-- Seeds reproduce initialization on the same runtime implementation, not a permanent cross-version serialization contract. There is no model file format or built-in persistence.
-- Memory usage grows with the number of weights and activations. Impossible topology arithmetic throws `OverflowException`; excessively large allocations may throw `OutOfMemoryException`.
-- No accuracy, throughput or suitability guarantees for real-world datasets.
+- The models implement the specific variants listed above. CNN has one input channel/stage. Sequence models use fixed lengths and final outputs. Transformer is one single-head encoder block, with no decoder, tokenizer or text generation.
+- All gradient heads are sigmoid with half summed squared-error loss. RBF centers and width are fixed; Perceptron, Hopfield and SOM use their own learning rules.
+- Sequential per-sample SGD only. Data preparation, normalization, shuffling, evaluation splits and stopping criteria belong to the caller. Seeds and learning rates affect convergence. Sigmoid can saturate, ReLU filters can become inactive, and sequence gradients can vanish or explode.
+- Finite inputs can still overflow arithmetic. Rejected steps preserve model parameters. Instances require synchronization around concurrent mutation.
+- Explicit scalar loops and temporary graphs favor readability over speed. There is no GPU execution, optimized tensor backend, minibatch optimizer, gradient clipping or model persistence format. Use tiny datasets and short sequences.
+- Seeds reproduce results on the same runtime, not across all runtime versions. Large dimensions can exhaust memory; parameter-count overflow is checked.
+- Example training errors are measurements on synthetic training cases, with no real-world accuracy, throughput or generalization guarantee.
 
 ## License
 

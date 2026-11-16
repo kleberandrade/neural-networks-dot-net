@@ -1,4 +1,6 @@
-# Mathematics and glossary
+# Dense MLP mathematics and glossary
+
+This derivation describes `DenseNetwork`. Architecture-specific equations are in [the individual guides](README.md); the other differentiable models share [the reverse-mode training engine](TRAINING.md).
 
 A **layer** contains neurons. A **weight** connects one neuron to an input from the previous layer. A **bias** shifts a neuron's weighted sum. An **activation** is the neuron's output. A **parameter** is a weight or bias. A **sample** is an input and target pair. An **epoch** visits every training sample once.
 

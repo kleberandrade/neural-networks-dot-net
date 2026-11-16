@@ -1,4 +1,6 @@
-# API guide
+# Dense MLP API guide
+
+This page documents `DenseNetwork`. For the other architectures, see the [learning index](README.md) and [shared gradient contracts](TRAINING.md).
 
 Namespace: `NeuralNetworks`. Type: `sealed class DenseNetwork`.
 
