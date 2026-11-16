@@ -80,7 +80,7 @@ dotnet format --verify-no-changes --no-restore
 
 The test project is a package-free executable that prints each result and exits nonzero on failure. **`dotnet test` does not run this suite.** Tests cover known forward arithmetic, finite differences for every weight and bias, multiple hidden layers and outputs, loss reduction, XOR learning, deterministic seeding, array ownership, invalid dimensions/values, sigmoid saturation and atomic overflow rejection.
 
-[CI](.github/workflows/ci.yml) runs these commands on Linux, macOS and Windows. Local validation is recorded in [the implementation log](docs/WORK_LOG.md); remote CI has not been run as part of this change. The installed ub-mode quality tools do not support C#, so no automated CRAP, duplication, coverage or mutation score is reported.
+[CI](.github/workflows/ci.yml) runs these commands on Linux, macOS and Windows. Local validation is recorded in [the implementation log](docs/WORK_LOG.md). The installed ub-mode quality tools do not support C#, so no automated CRAP, duplication, coverage or mutation score is reported.
 
 ## Design and limitations
 
