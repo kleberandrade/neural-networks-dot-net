@@ -7,7 +7,7 @@ dotnet build --configuration Release
 dotnet run --project tests/NeuralNetworks.Tests --configuration Release --no-build
 ```
 
-`dotnet test` does not run this suite. CI also runs both original XOR modes, every architecture demo and the formatter on Linux, macOS and Windows.
+`dotnet test` does not run this suite. CI also runs both original XOR modes, every architecture demo, the multi-head/encoder-decoder example and the formatter on Linux, macOS and Windows.
 
 ## Numerical behavior
 
@@ -15,9 +15,11 @@ dotnet run --project tests/NeuralNetworks.Tests --configuration Release --no-bui
 - **RBF and autoencoder:** known Gaussian/head and encoding/decoding values, gradients through every trainable head or encoder/decoder parameter.
 - **CNN:** independent known patch/pooling values, positive/negative ReLU branches and numerical gradients for shared kernels/head across several patch positions.
 - **RNN, LSTM, GRU:** independent hand-computed two-step state/gate examples; numerical gradients through shared parameters across the unrolled sequence.
-- **Transformer:** independent scaled dot-product scores and normalized attention values, row sums, other-position influence, detached attention arrays; numerical gradients through every projection, head and normalization gamma/beta.
+- **Transformer encoder:** independent single/multi-head scores, head-width scaling, concatenated-context outputs, row sums, other-position influence and detached attention arrays; numerical gradients through every projection, head and normalization gamma/beta.
 
-For the tape models, central finite differences perturb each trainable parameter by `h = 1e-5` and compare with an absolute tolerance of `2e-6`. The dense test uses `1e-8`. Inputs are deliberately moderate and avoid ReLU kinks. Gradients and finite differences can both be misleading around a nondifferentiable point; this suite does not claim all-input numerical equivalence.
+- **Encoder-decoder:** every trainable parameter against numerical gradients, including masked objectives; future decoder inputs cannot change earlier predictions; padded features/targets cannot alter valid predictions, loss or gradients; masked attention weights are zero; cross-attention depends on source memory. Checks also cover unequal source/target lengths, multiple features, mask validation, repeatability and atomic overflow rejection.
+
+For the tape models, central finite differences perturb each trainable parameter by `h = 1e-5` and compare with an absolute tolerance of `2e-6`. The dense test uses `1e-8`; the extended multi-head/encoder-decoder tests use `3e-6`. Inputs are deliberately moderate and avoid ReLU kinks. Gradients and finite differences can both be misleading around a nondifferentiable point; this suite does not claim all-input numerical equivalence.
 
 ## Learning behavior
 
@@ -31,6 +33,7 @@ The fixtures use deterministic synthetic data and fixed seeds, with no external 
 - RNN, LSTM and GRU remember a first-step bit after two zero-input steps.
 - Autoencoder reconstructs two complementary patterns through one latent unit.
 - Transformer encoder distinguishes two small numerical sequences.
+- A two-head encoder-decoder learns two-bit reversal using teacher forcing, then generates all four reversed sequences autoregressively without target inputs. Its target-length-two loss must fall below one tenth of the initial value and generated outputs must be within 0.2 of the reverse targets.
 
 Gradient demos require mean loss below one fifth of initial loss and every output within 0.2 of its target. The original XOR example has its stricter 0.08 output threshold. These thresholds concern training fixtures, not held-out generalization. A failing CNN fixture with uncentered inputs exposed inactive ReLU filters; the guide records this limitation, and the executable example uses centered inputs.
 

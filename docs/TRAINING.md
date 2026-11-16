@@ -38,7 +38,7 @@ Models copy topology, RBF centers and supplied parameter arrays. Predictions, gr
 - All gradient models use sigmoid heads and targets in `[0, 1]`. Outputs are independent, not a softmax class distribution. RBF centers/width are fixed hyperparameters.
 - A learning rate must be finite and positive. It has no convergence guarantee.
 - Non-finite sums, products, tape values, derivatives or candidate updates throw `ArithmeticException`. Invalid arguments throw `ArgumentException` or a more specific subtype. Failed gradient/perceptron/SOM updates leave parameters unchanged; failed Hopfield fitting preserves the previous memory bank.
-- Evaluation is stateless across calls. Sequence state starts at zero for every sample; there is no streaming state, sequence masking or padding handling.
+- Evaluation is stateless across calls. Recurrent state starts at zero for every sample; RNN/LSTM/GRU have no streaming or masking API. TransformerSequenceToSequence supports explicit source/target padding masks and causal decoder attention, with a fresh graph and copied masks per call.
 
 ## Flattened parameter ordering
 
@@ -51,7 +51,8 @@ A linear block stores destination neurons in order; each neuron has its input we
 - **RNN:** output head, then recurrent cell. The cell's input is `[currentFeatures, previousHidden]`.
 - **LSTM:** output head, forget gate, input gate, candidate, output gate. Gate inputs are `[currentFeatures, previousHidden]`.
 - **GRU:** output head, update gate, reset gate, candidate. Candidate input is `[currentFeatures, resetGate × previousHidden]`.
-- **Transformer:** input projection, Q, K, V, attention output projection, feedforward input, feedforward output, final head, normalization 1, normalization 2. Each normalization stores the gamma vector then beta vector.
+- **TransformerEncoder:** input projection, Q, K, V, attention output projection, feedforward input, feedforward output, final head, normalization 1, normalization 2. Each normalization stores the gamma vector then beta vector. Head count splits Q/K/V coordinates without changing parameter count.
+- **TransformerSequenceToSequence:** see the [encoder-decoder guide](architectures/transformer-seq2seq.md#how-it-was-programmed) for its source/target, encoder, decoder and normalization block order.
 
 `SetParameters` validates vector length, not topology metadata. A snapshot belongs with its exact architecture, dimensions and hyperparameters; equal parameter counts do not establish compatibility.
 
@@ -70,3 +71,7 @@ var output = model.Predict([1, 0, 0]);
 ```
 
 The executable tour uses this contract and checks actual loss reduction. Dataset preparation, normalization, shuffling, splits and stopping rules remain the caller's responsibility.
+
+## Masked sequence objectives
+
+The encoder-decoder uses the same SGD engine with a per-call forward function and a Boolean output-loss mask. Target-padding positions are omitted from the half summed squared-error objective; the loss is not normalized by valid token count. The forward closure holds only validated, copied masks for that call, so there is no mutable model-wide mask context. The typed source/decoder overloads validate both vectors, masks and targets before committing updates. The inherited flat interface remains unmasked; see the [shape contract](architectures/transformer-seq2seq.md#api-and-shapes).

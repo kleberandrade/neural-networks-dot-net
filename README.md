@@ -23,7 +23,7 @@ Every guide explains **how the network works, how it was programmed, how to use 
 - [LSTM](docs/architectures/lstm.md): forget/input/output gates and a separate cell state.
 - [GRU](docs/architectures/gru.md): reset-before recurrent gating.
 - [Autoencoder](docs/architectures/autoencoder.md): sigmoid bottleneck and reconstruction.
-- [Transformer encoder](docs/architectures/transformer.md): one single-head encoder block with positions, residuals, normalization and FFN.
+- [Transformer](docs/architectures/transformer.md): multi-head encoder plus an [encoder-decoder](docs/architectures/transformer-seq2seq.md) with causal attention, cross-attention, padding and autoregressive generation.
 
 Start with the [learning path and documentation index](docs/README.md). [Common training contracts](docs/TRAINING.md) explain parameter ordering and the small reverse-mode tape used by the newer gradient models. The MLP keeps its separate, explicit backpropagation implementation. These are specific educational variants, not every architecture or feature of a production framework.
 
@@ -43,6 +43,7 @@ cd neural-networks-dot-net
 dotnet restore
 dotnet build --configuration Release --no-restore
 dotnet run --project examples/Architectures --configuration Release --no-build -- all
+dotnet run --project examples/Transformer --configuration Release --no-build -- all
 ```
 
 To run only the original XOR example, use `dotnet run --project examples/Xor -- train`. The seeded `2 → 4 → 1` network trains for 10,000 epochs, taking four SGD steps per epoch in a fixed order. A validated run with SDK 10.0.404 produced:
@@ -89,6 +90,16 @@ Run the whole tour with `dotnet run --project examples/Architectures -- all`, or
 - **Inspect gradients:** `ComputeGradient(input, target)` returns an independent gradient vector without updating the model. The tests compare it to central finite differences.
 - **Parameter snapshots:** `GetParameters()` and `SetParameters(values)` copy arrays. See [the API guide](docs/API.md) for ordering and validation.
 
+### Multi-head Transformer and encoder-decoder
+
+```sh
+dotnet run --project examples/Transformer -- all
+# Select just encoder or seq2seq:
+dotnet run --project examples/Transformer -- seq2seq
+```
+
+The new example trains a two-head encoder and an encoder-decoder that reverses two-bit numerical sequences. It verifies free-running generation using only source and BOS, separately from teacher-forced training. See the [multi-head guide](docs/architectures/transformer.md) and [encoder-decoder guide](docs/architectures/transformer-seq2seq.md) for equations, code structure, masks and usage.
+
 ## Tests and CI
 
 ```sh
@@ -97,6 +108,7 @@ dotnet run --project tests/NeuralNetworks.Tests --configuration Release --no-bui
 dotnet run --project examples/Xor --configuration Release --no-build -- train
 dotnet run --project examples/Xor --configuration Release --no-build -- infer
 dotnet run --project examples/Architectures --configuration Release --no-build -- all
+dotnet run --project examples/Transformer --configuration Release --no-build -- all
 dotnet format --verify-no-changes --no-restore
 ```
 
@@ -108,7 +120,7 @@ The test project is a package-free executable that prints each result and exits 
 
 See the [individual architecture guides](docs/README.md), [common contracts](docs/TRAINING.md), [dense mathematics](docs/MATHEMATICS.md) and [dense API](docs/API.md).
 
-- The models implement the specific variants listed above. CNN has one input channel/stage. Sequence models use fixed lengths and final outputs. Transformer is one single-head encoder block, with no decoder, tokenizer or text generation.
+- The models implement the specific variants listed above. CNN has one input channel/stage. RNN/LSTM/GRU use fixed lengths and final outputs; the Transformer encoder-decoder produces a vector at every target position. Transformer supports one multi-head encoder block and one causal decoder block. Numerical sequence generation is supported; tokenization and vocabulary-based language modeling are outside this implementation.
 - All gradient heads are sigmoid with half summed squared-error loss. RBF centers and width are fixed; Perceptron, Hopfield and SOM use their own learning rules.
 - Sequential per-sample SGD only. Data preparation, normalization, shuffling, evaluation splits and stopping criteria belong to the caller. Seeds and learning rates affect convergence. Sigmoid can saturate, ReLU filters can become inactive, and sequence gradients can vanish or explode.
 - Finite inputs can still overflow arithmetic. Rejected steps preserve model parameters. Instances require synchronization around concurrent mutation.
