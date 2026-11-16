@@ -17,7 +17,12 @@ var tests = new (string Name, Action Run)[]
     ("Known RBF and autoencoder arithmetic", GradientModelTests.KnownRbfAndAutoencoder),
     ("Known convolution and recurrent gate arithmetic", GradientModelTests.KnownSequenceAndConvolution),
     ("Known attention scores, normalization and cross-position influence", AttentionTests.KnownScaledAttention),
-    ("All new differentiable architectures learn small tasks", GradientModelTests.LearnsTinyTasks)
+    ("All new differentiable architectures learn small tasks", GradientModelTests.LearnsTinyTasks),
+    ("Independent multi-head scaled attention scores", TransformerTests.MultiHeadScores),
+    ("Multi-head encoder and encoder-decoder numerical gradients", TransformerTests.Gradients),
+    ("Decoder causality, padding and cross-attention", TransformerTests.CausalAndPaddingMasks),
+    ("Encoder-decoder boundaries, isolation and atomic updates", TransformerTests.Boundaries),
+    ("Encoder-decoder learns autoregressive sequence reversal", TransformerTests.LearnsReverse)
 };
 var failures = 0;
 foreach (var test in tests)

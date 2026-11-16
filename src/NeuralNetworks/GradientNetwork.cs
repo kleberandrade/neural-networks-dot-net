@@ -27,26 +27,32 @@ public abstract class GradientNetwork : IGradientNetwork
         parameters = (double[])values.Clone();
     }
 
-    public double[] Predict(double[] input) => Evaluate(input).Output.Select(x => x.Value).ToArray();
+    public double[] Predict(double[] input) => PredictUsing(input, Forward);
+    public double Loss(double[] input, double[] target) => LossUsing(input, target, Forward);
+    public double[] ComputeGradient(double[] input, double[] target) => GradientUsing(input, target, Forward);
+    public double TrainSample(double[] input, double[] target, double learningRate) =>
+        TrainUsing(input, target, learningRate, Forward);
 
-    public double Loss(double[] input, double[] target)
+    private protected double[] PredictUsing(double[] input, Func<Scalar[], Scalar[], Scalar[]> forward) =>
+        Evaluate(input, forward).Output.Select(x => x.Value).ToArray();
+
+    private protected double LossUsing(double[] input, double[] target, Func<Scalar[], Scalar[], Scalar[]> forward, bool[]? mask = null)
     {
         Guard.Target(target, OutputSize);
-        return Objective(Evaluate(input).Output, target).Value;
+        return Objective(Evaluate(input, forward).Output, target, mask).Value;
     }
 
-    public double[] ComputeGradient(double[] input, double[] target)
+    private protected double[] GradientUsing(double[] input, double[] target, Func<Scalar[], Scalar[], Scalar[]> forward, bool[]? mask = null)
     {
         Guard.Target(target, OutputSize);
-        return Gradient(Evaluate(input), target).Values;
+        return Gradient(Evaluate(input, forward), target, mask).Values;
     }
 
-    public double TrainSample(double[] input, double[] target, double learningRate)
+    private protected double TrainUsing(double[] input, double[] target, double learningRate, Func<Scalar[], Scalar[], Scalar[]> forward, bool[]? mask = null)
     {
         Guard.LearningRate(learningRate);
         Guard.Target(target, OutputSize);
-        var evaluation = Evaluate(input);
-        var gradient = Gradient(evaluation, target);
+        var gradient = Gradient(Evaluate(input, forward), target, mask);
         var updated = new double[ParameterCount];
         for (var i = 0; i < updated.Length; i++)
             updated[i] = Guard.Finite(parameters[i] - Guard.Finite(learningRate * gradient.Values[i]));
@@ -67,6 +73,9 @@ public abstract class GradientNetwork : IGradientNetwork
         return new LinearBlock(inputs, outputs, offset);
     }
 
+    private protected LayerNormalization AddNormalization(int size) =>
+        new(size, AddParameters([.. Enumerable.Repeat(1.0, size), .. new double[size]]));
+
     private protected int AddParameters(double[] values)
     {
         var offset = parameters.Length;
@@ -82,26 +91,27 @@ public abstract class GradientNetwork : IGradientNetwork
         return (input.Select(tape.Leaf).ToArray(), parameters.Select(tape.Leaf).ToArray());
     }
 
-    private (Scalar[] Output, Scalar[] Parameters) Evaluate(double[] input)
+    private (Scalar[] Output, Scalar[] Parameters) Evaluate(double[] input, Func<Scalar[], Scalar[], Scalar[]> forward)
     {
         var graph = CreateGraph(input);
-        return (Forward(graph.Input, graph.Parameters), graph.Parameters);
+        return (forward(graph.Input, graph.Parameters), graph.Parameters);
     }
 
-    private static Scalar Objective(Scalar[] output, double[] target)
+    private static Scalar Objective(Scalar[] output, double[] target, bool[]? mask)
     {
         var loss = output[0].Constant(0);
         for (var i = 0; i < output.Length; i++)
         {
+            if (mask is not null && mask[i]) continue;
             var error = output[i] + (-target[i]);
             loss += error * error * 0.5;
         }
         return loss;
     }
 
-    private static (double Loss, double[] Values) Gradient((Scalar[] Output, Scalar[] Parameters) graph, double[] target)
+    private static (double Loss, double[] Values) Gradient((Scalar[] Output, Scalar[] Parameters) graph, double[] target, bool[]? mask)
     {
-        var loss = Objective(graph.Output, target);
+        var loss = Objective(graph.Output, target, mask);
         var gradients = loss.Tape.Backward(loss);
         return (loss.Value, graph.Parameters.Select(p => gradients[p.Id]).ToArray());
     }
