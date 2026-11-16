@@ -23,4 +23,5 @@ jobs:
       - run: dotnet run --project tests/NeuralNetworks.Tests --configuration Release --no-build
       - run: dotnet run --project examples/Xor --configuration Release --no-build -- train
       - run: dotnet run --project examples/Xor --configuration Release --no-build -- infer
+      - run: dotnet run --project examples/Architectures --configuration Release --no-build -- all
       - run: dotnet format --verify-no-changes --no-restore

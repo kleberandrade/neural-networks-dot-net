@@ -2,7 +2,7 @@ namespace NeuralNetworks;
 
 /// <summary>A small dense feedforward network with sigmoid activations and squared error.</summary>
 /// <remarks>Instances are mutable and are not safe for concurrent training or parameter updates.</remarks>
-public sealed class DenseNetwork
+public sealed class DenseNetwork : IGradientNetwork
 {
     private readonly int[] sizes;
     private readonly int[] offsets;

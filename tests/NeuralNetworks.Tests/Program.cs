@@ -12,6 +12,12 @@ var tests = new (string Name, Action Run)[]
     ("Perceptron learns AND and rejects invalid inputs", ClassicTests.PerceptronLearns),
     ("Hopfield recalls a noisy memory and decreases energy", ClassicTests.HopfieldRecalls),
     ("SOM updates winner and grid neighbors", ClassicTests.SomOrganizes),
+    ("All differentiable architectures match numerical gradients", GradientModelTests.Gradients),
+    ("New model boundaries and isolation", GradientModelTests.BoundariesAndIsolation),
+    ("Known RBF and autoencoder arithmetic", GradientModelTests.KnownRbfAndAutoencoder),
+    ("Known convolution and recurrent gate arithmetic", GradientModelTests.KnownSequenceAndConvolution),
+    ("Known attention scores, normalization and cross-position influence", AttentionTests.KnownScaledAttention),
+    ("All new differentiable architectures learn small tasks", GradientModelTests.LearnsTinyTasks)
 };
 var failures = 0;
 foreach (var test in tests)
