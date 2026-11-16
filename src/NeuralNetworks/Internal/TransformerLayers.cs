@@ -9,13 +9,18 @@ internal static class TransformerLayers
         {
             if (padding is not null && padding[t]) { tokens[t] = Operations.Zeros(input[0], size); continue; }
             tokens[t] = projection.Apply(parameters, input.AsSpan(t * features, features).ToArray());
-            for (var i = 0; i < size; i++)
-            {
-                var angle = t / Math.Pow(10000, 2.0 * (i / 2) / size);
-                tokens[t][i] += i % 2 == 0 ? Math.Sin(angle) : Math.Cos(angle);
-            }
+            AddPosition(tokens[t], t);
         }
         return tokens;
+    }
+
+    public static void AddPosition(Scalar[] token, int position)
+    {
+        for (var i = 0; i < token.Length; i++)
+        {
+            var angle = position / Math.Pow(10000, 2.0 * (i / 2) / token.Length);
+            token[i] += i % 2 == 0 ? Math.Sin(angle) : Math.Cos(angle);
+        }
     }
 
     public static Scalar[][] Residual(Scalar[][] input, Scalar[][] update, Scalar[] parameters, LayerNormalization norm) =>

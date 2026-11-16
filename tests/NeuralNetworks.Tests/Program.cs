@@ -22,7 +22,7 @@ var tests = new (string Name, Action Run)[]
     ("Multi-head encoder and encoder-decoder numerical gradients", TransformerTests.Gradients),
     ("Decoder causality, padding and cross-attention", TransformerTests.CausalAndPaddingMasks),
     ("Encoder-decoder boundaries, isolation and atomic updates", TransformerTests.Boundaries),
-    ("Encoder-decoder learns autoregressive sequence reversal", TransformerTests.LearnsReverse)
+    ("Encoder-decoder learns autoregressive sequence reversal", TransformerTests.LearnsReverse),
 };
 var failures = 0;
 foreach (var test in tests)

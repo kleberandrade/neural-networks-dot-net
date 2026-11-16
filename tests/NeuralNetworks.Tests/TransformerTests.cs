@@ -65,7 +65,7 @@ internal static class TransformerTests
 
     public static void CausalAndPaddingMasks()
     {
-        var model = new TransformerSequenceToSequence(3, 3, 1, 1, 4, 2, 4, 42);
+        var model = new TransformerSequenceToSequence(3, 3, 1, 1, 4, 2, 4, 42, encoderLayerCount: 2, decoderLayerCount: 2);
         var a = model.Predict([0.2, 0.7, 0.4], [0.5, 0.1, 0.2]);
         var b = model.Predict([0.2, 0.7, 0.4], [0.5, 0.1, 0.9]);
         Check.Near(a[0], b[0]);
@@ -95,6 +95,15 @@ internal static class TransformerTests
             foreach (var row in head) { Check.Near(1, row.Sum()); Check.Near(0, row[2]); }
         foreach (var head in attention.EncoderSelf)
             foreach (var row in head) { Check.Near(1, row.Sum()); Check.Near(0, row[2]); }
+        var layers = model.GetLayerAttentionWeights([0.2, 0.7, 999], [0.5, 0.1, 999], padding, padding);
+        foreach (var layer in layers.DecoderSelf)
+            foreach (var head in layer)
+                for (var query = 0; query < 3; query++)
+                    for (var key = 0; key < 3; key++)
+                        if (key > query || padding[key]) Check.Near(0, head[query][key]);
+        foreach (var layer in layers.Cross)
+            foreach (var head in layer)
+                foreach (var row in head) Check.Near(0, row[2]);
         attention.Cross[0][0][0] = 999;
         Check.True(model.GetAttentionWeights([0.2, 0.7, 0.4], [0.5, 0.1, 0.2]).Cross[0][0][0] != 999, "Attention was aliased.");
         var other = model.Predict([0.9, 0.1, 0.4], [0.5, 0.1, 0.2]);

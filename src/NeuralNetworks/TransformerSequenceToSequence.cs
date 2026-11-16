@@ -5,18 +5,17 @@ namespace NeuralNetworks;
 /// <summary>Detached attention matrices, indexed by head, query position, then key position.</summary>
 public sealed record TransformerAttentionWeights(double[][][] EncoderSelf, double[][][] DecoderSelf, double[][][] Cross);
 
-/// <summary>One multi-head encoder and one causal decoder for fixed-length numerical sequences.</summary>
+/// <summary>Detached per-layer attention: layer, head, query, key.</summary>
+public sealed record TransformerStackAttentionWeights(double[][][][] EncoderSelf, double[][][][] DecoderSelf, double[][][][] Cross);
+
+/// <summary>Stacks of multi-head encoders and causal decoders for fixed-length numerical sequences.</summary>
 public sealed class TransformerSequenceToSequence : GradientNetwork
 {
     private readonly LinearBlock sourceProjection;
     private readonly LinearBlock targetProjection;
     private readonly LinearBlock output;
-    private readonly TransformerEncoderLayer encoder;
-    private readonly MultiHeadAttention decoderSelf;
-    private readonly MultiHeadAttention cross;
-    private readonly LayerNormalization selfNorm;
-    private readonly LayerNormalization crossNorm;
-    private readonly TransformerFeedForward decoderFeedForward;
+    private readonly TransformerEncoderLayer[] encoders;
+    private readonly TransformerDecoderLayer[] decoders;
     private readonly bool[] noSourcePadding;
     private readonly bool[] noTargetPadding;
     public int SourceLength { get; }
@@ -27,9 +26,11 @@ public sealed class TransformerSequenceToSequence : GradientNetwork
     public int TargetSize { get; }
     public int ModelSize { get; }
     public int HeadCount { get; }
+    public int EncoderLayerCount { get; }
+    public int DecoderLayerCount { get; }
 
     public TransformerSequenceToSequence(int sourceLength, int targetLength, int inputSize, int outputSize,
-        int modelSize = 4, int headCount = 2, int feedForwardSize = 8, int seed = 0)
+        int modelSize = 4, int headCount = 2, int feedForwardSize = 8, int seed = 0, int encoderLayerCount = 1, int decoderLayerCount = 1)
         : base(checked(Count(sourceLength, inputSize) + Count(targetLength, outputSize)), Count(targetLength, outputSize), seed)
     {
         MultiHeadAttention.Validate(modelSize, headCount);
@@ -42,18 +43,15 @@ public sealed class TransformerSequenceToSequence : GradientNetwork
         TargetSize = Count(targetLength, outputSize);
         ModelSize = modelSize;
         HeadCount = headCount;
+        EncoderLayerCount = Guard.Positive(encoderLayerCount, nameof(encoderLayerCount));
+        DecoderLayerCount = Guard.Positive(decoderLayerCount, nameof(decoderLayerCount));
         noSourcePadding = new bool[sourceLength];
         noTargetPadding = new bool[targetLength];
         sourceProjection = AddLinear(inputSize, modelSize);
         targetProjection = AddLinear(outputSize, modelSize);
-        var encoderAttention = AddAttention();
-        var encoderNorm = AddNormalization(modelSize);
-        encoder = new TransformerEncoderLayer(encoderAttention, encoderNorm, AddFeedForward(feedForwardSize));
-        decoderSelf = AddAttention();
-        selfNorm = AddNormalization(modelSize);
-        cross = AddAttention();
-        crossNorm = AddNormalization(modelSize);
-        decoderFeedForward = AddFeedForward(feedForwardSize);
+        var builder = new TransformerBuilder(AddLinear, AddNormalization, modelSize, headCount, feedForwardSize);
+        encoders = Enumerable.Range(0, EncoderLayerCount).Select(_ => builder.Encoder()).ToArray();
+        decoders = Enumerable.Range(0, DecoderLayerCount).Select(_ => builder.Decoder()).ToArray();
         output = AddLinear(modelSize, outputSize);
     }
 
@@ -84,13 +82,22 @@ public sealed class TransformerSequenceToSequence : GradientNetwork
     }
 
     public TransformerAttentionWeights GetAttentionWeights(double[] source, double[] decoderInput,
+        bool[]? sourcePaddingMask = null, bool[]? targetPaddingMask = null, int encoderLayerIndex = 0, int decoderLayerIndex = 0)
+    {
+        if (encoderLayerIndex < 0 || encoderLayerIndex >= EncoderLayerCount) throw new ArgumentOutOfRangeException(nameof(encoderLayerIndex));
+        if (decoderLayerIndex < 0 || decoderLayerIndex >= DecoderLayerCount) throw new ArgumentOutOfRangeException(nameof(decoderLayerIndex));
+        var layers = GetLayerAttentionWeights(source, decoderInput, sourcePaddingMask, targetPaddingMask);
+        return new TransformerAttentionWeights(layers.EncoderSelf[encoderLayerIndex], layers.DecoderSelf[decoderLayerIndex], layers.Cross[decoderLayerIndex]);
+    }
+
+    public TransformerStackAttentionWeights GetLayerAttentionWeights(double[] source, double[] decoderInput,
         bool[]? sourcePaddingMask = null, bool[]? targetPaddingMask = null)
     {
         var sample = Prepare(source, decoderInput, sourcePaddingMask, targetPaddingMask);
         var graph = CreateGraph(sample.Input);
         var result = Build(graph.Input, graph.Parameters, sample.SourcePadding, sample.TargetPadding);
-        return new TransformerAttentionWeights(TransformerLayers.Snapshot(result.Encoder),
-            TransformerLayers.Snapshot(result.Decoder), TransformerLayers.Snapshot(result.Cross));
+        return new TransformerStackAttentionWeights(TransformerStacks.Snapshot(result.Encoder),
+            TransformerStacks.Snapshot(result.Decoder), TransformerStacks.Snapshot(result.Cross));
     }
 
     /// <summary>Autoregressively feeds predictions back into the decoder; never takes true target values.</summary>
@@ -119,18 +126,15 @@ public sealed class TransformerSequenceToSequence : GradientNetwork
     {
         var source = TransformerLayers.Embed(input.AsSpan(0, SourceSize).ToArray(), parameters,
             sourceProjection, SourceLength, InputFeatures, ModelSize, sourcePadding);
-        var memory = encoder.Apply(source, parameters, sourcePadding);
+
         var target = TransformerLayers.Embed(input.AsSpan(SourceSize).ToArray(), parameters,
             targetProjection, TargetLength, OutputFeatures, ModelSize, targetPadding);
-        var selfAttention = decoderSelf.Apply(target, target, parameters, targetPadding, causal: true);
-        var first = TransformerLayers.Residual(target, selfAttention.Output, parameters, selfNorm);
-        var crossAttention = cross.Apply(first, memory.Output, parameters, sourcePadding);
-        var second = TransformerLayers.Residual(first, crossAttention.Output, parameters, crossNorm);
-        var decoded = decoderFeedForward.Apply(second, parameters);
+        var stack = TransformerStacks.Apply(source, target, parameters, encoders, decoders, sourcePadding, targetPadding);
+        var decoded = stack.Output;
         var result = decoded.SelectMany((token, t) => targetPadding[t]
             ? Operations.Zeros(input[0], OutputFeatures)
             : Operations.Sigmoid(output.Apply(parameters, token))).ToArray();
-        return new Evaluation(result, memory.Weights, selfAttention.Weights, crossAttention.Weights);
+        return new Evaluation(result, stack.Encoder, stack.Decoder, stack.Cross);
     }
 
     private Prepared Prepare(double[] source, double[] decoderInput, bool[]? sourcePaddingMask, bool[]? targetPaddingMask)
@@ -143,15 +147,9 @@ public sealed class TransformerSequenceToSequence : GradientNetwork
             targetMask.SelectMany(pad => Enumerable.Repeat(pad, OutputFeatures)).ToArray());
     }
 
-    private MultiHeadAttention AddAttention() => new(AddLinear(ModelSize, ModelSize), AddLinear(ModelSize, ModelSize),
-        AddLinear(ModelSize, ModelSize), AddLinear(ModelSize, ModelSize), ModelSize, HeadCount);
-
-    private TransformerFeedForward AddFeedForward(int size) =>
-        new(AddLinear(ModelSize, size), AddLinear(size, ModelSize), AddNormalization(ModelSize));
-
     private static int Count(int length, int features) =>
         checked(Guard.Positive(length, nameof(length)) * Guard.Positive(features, nameof(features)));
 
     private readonly record struct Prepared(double[] Input, bool[] SourcePadding, bool[] TargetPadding, bool[] OutputMask);
-    private readonly record struct Evaluation(Scalar[] Output, Scalar[][][] Encoder, Scalar[][][] Decoder, Scalar[][][] Cross);
+    private readonly record struct Evaluation(Scalar[] Output, Scalar[][][][] Encoder, Scalar[][][][] Decoder, Scalar[][][][] Cross);
 }
