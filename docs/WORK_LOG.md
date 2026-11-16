@@ -16,3 +16,9 @@
 - Received explicit follow-up authorization to push the complete implementation to the main branch and update the GitHub About description. This supersedes the earlier local-only restriction. Remote CI verification follows publication.
 - Published implementation commit e335cb8 to master with a normal push and applied/verified the GitHub About description: "Educational dense neural networks in C#/.NET 10 with backpropagation, reproducible XOR examples, and numerical tests." Dynamic CI badge and workflow links returned HTTP 200.
 - First remote CI run 43793621179: builds, behavior tests and both examples passed on all three OSes. Linux/macOS formatting passed; Windows formatting failed with ENDOFLINE because Git converted LF to CRLF on checkout. Added .gitattributes to preserve LF consistently with .editorconfig, then checked filtered checkout content with core.autocrlf=true. No application-code change was needed.
+
+## Architecture expansion and main branch migration
+
+- User requested classical and modern foundational architectures, with a separate educational guide per architecture. Scope: Perceptron, existing dense MLP, RBF, Hopfield, SOM, CNN, RNN, LSTM, GRU, autoencoder and a compact Transformer encoder. No claim of supporting every neural architecture or production workload.
+- Read test-master skill in addition to the active ub-mode rules. Keep numerical gradient checks, deterministic small learning tasks and boundary/ownership checks; no invented coverage percentages.
+- Renamed the original default branch from master to main using GitHub's branch rename endpoint, preserving its history; updated the local branch, upstream, origin/HEAD and README CI badge. No protected branch policy was disabled. Previous final CI run 43793789622 passed on all three operating systems.

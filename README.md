@@ -3,7 +3,7 @@
 [![C# 14](https://img.shields.io/badge/C%23-14-239120)](https://learn.microsoft.com/en-us/dotnet/csharp/whats-new/csharp-14)
 [![.NET 10 LTS](https://img.shields.io/badge/.NET-10%20LTS-512BD4)](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
 [![MIT license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![CI](https://github.com/kleberandrade/neural-networks-dot-net/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/kleberandrade/neural-networks-dot-net/actions/workflows/ci.yml)
+[![CI](https://github.com/kleberandrade/neural-networks-dot-net/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kleberandrade/neural-networks-dot-net/actions/workflows/ci.yml)
 
 A small educational library that implements a dense feedforward neural network from scratch. Read the complete forward pass, backpropagation and stochastic gradient descent in [one class](src/NeuralNetworks/DenseNetwork.cs), then run XOR to see the network learn a nonlinear function.
 
