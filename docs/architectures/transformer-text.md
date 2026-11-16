@@ -79,13 +79,13 @@ using NeuralNetworks;
 
 var tokenizer = CharacterTokenizer.FromCorpus(["a", "b", "ola", "oi"]);
 var model = new TextTransformer(tokenizer.VocabularySize,
-    sourceLength: 2, targetLength: 4, modelSize: 4, headCount: 2,
+    sourceLength: 2, targetLength: 4, modelSize: 8, headCount: 2,
     feedForwardSize: 8, encoderLayerCount: 2, decoderLayerCount: 2, seed: 42);
 int[][] source = [tokenizer.Encode("a", addEos: true), tokenizer.Encode("b", addEos: true)];
 int[][] target = [tokenizer.Encode("ola", addEos: true), tokenizer.Encode("oi", addEos: true)];
 for (var epoch = 0; epoch < 800; epoch++)
     for (var i = 0; i < source.Length; i++)
-        model.TrainSample(source[i], target[i], learningRate: 0.05);
+        model.TrainSample(source[i], target[i], learningRate: 0.03);
 
 var generated = model.Generate(tokenizer.Encode("a", addEos: true));
 var text = tokenizer.Decode(generated.Tokens); // "ola", with EndedWithEos == true
@@ -107,7 +107,7 @@ The executable requires loss below one tenth of its initial value and exact gree
 
 ```text
 Character vocabulary: 9; encoder layers: 2; decoder layers: 2; heads: 2
-Mean token cross-entropy: 2.387490 -> 0.027587
+Mean token cross-entropy: 2.465243 -> 0.003124
 a -> ola; ids=[8,7,4,2]; EOS=True
 b -> oi; ids=[8,6,2]; EOS=True
 ```
@@ -127,6 +127,8 @@ This is learned training-pair memorization; the replies are not returned from a 
 Tests cover Unicode roundtrips, deterministic vocabularies, unknown/special tokens, malformed UTF-16, full numerical gradients through embeddings and two-layer stacks, nonzero gradient signal in every layer, known uniform cross-entropy/logit derivatives, extremely unlikely targets, greedy ranking underflow, EOS/cap behavior, causal attention at every decoder layer, source-memory dependence, PAD invariance, detached arrays, invalid IDs/targets/capacities, seeded updates and atomic overflow rejection. Existing numerical examples remain regression tests.
 
 The tokenizer is character-based and corpus-fitted. The model uses explicit scalar loops and tapes, post-normalization, SGD and greedy decoding. It has no subword tokenizer, dropout, Adam, minibatches, KV cache, sampling/beam search, pretrained weights, checkpoint loader or corpus/data pipeline. More layers increase parameters, allocation and gradient instability; supported depth is not a guarantee of convergence or practical scalability. Use tiny vocabularies, short sequences and independent model instances around concurrent training.
+
+The demonstrated width 8 and learning rate 0.03 are validated training settings on macOS and Linux, not universal convergence guarantees. A fixed seed does not make every configuration learn across runtimes.
 
 Further reading: [Attention Is All You Need](https://arxiv.org/abs/1706.03762) for stacked encoder/decoder architecture; [.NET Rune decoding](https://learn.microsoft.com/en-us/dotnet/api/system.text.rune.decodefromutf16?view=net-10.0) for Unicode scalar validation. The tokenizer and teaching corpus are local implementations, not the original paper's subword pipeline.
 

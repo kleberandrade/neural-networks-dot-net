@@ -133,12 +133,12 @@ internal static class TextTransformerTests
     public static void LearnsText()
     {
         var tokenizer = CharacterTokenizer.FromCorpus(["a", "b", "ola", "oi"]);
-        var model = new TextTransformer(tokenizer.VocabularySize, 2, 4, 4, 2, 8, 2, 2, 42);
+        var model = new TextTransformer(tokenizer.VocabularySize, 2, 4, 8, 2, 8, 2, 2, 42);
         int[][] source = [tokenizer.Encode("a", addEos: true), tokenizer.Encode("b", addEos: true)];
         int[][] target = [tokenizer.Encode("ola", addEos: true), tokenizer.Encode("oi", addEos: true)];
         var initial = source.Select((s, i) => model.Loss(s, target[i])).Average();
         for (var epoch = 0; epoch < 800; epoch++)
-            for (var i = 0; i < source.Length; i++) model.TrainSample(source[i], target[i], 0.05);
+            for (var i = 0; i < source.Length; i++) model.TrainSample(source[i], target[i], 0.03);
         var final = source.Select((s, i) => model.Loss(s, target[i])).Average();
         Console.WriteLine($"  Text mean token CE: {initial:F6} -> {final:F6}");
         Check.True(final < initial / 10, "Text loss did not fall.");
