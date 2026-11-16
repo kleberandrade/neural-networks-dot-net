@@ -29,4 +29,5 @@ jobs:
       - run: dotnet run --project examples/TextGeneration --configuration Release --no-build
       - run: dotnet run --project examples/CorpusTraining --configuration Release --no-build -- demo
       - run: dotnet run --project examples/CorpusTraining --configuration Release --no-build -- adam-demo
+      - run: dotnet run --project examples/CorpusTraining --configuration Release --no-build -- scheduled-demo
       - run: dotnet format --verify-no-changes --no-restore

@@ -12,6 +12,7 @@ internal static class CorpusCommands
             {
                 case "demo": Demo(options); break;
                 case "adam-demo": Demo(options, adam: true); break;
+                case "scheduled-demo": Demo(options, adam: true, controlled: true); break;
                 case "train": Train(options, resume: false); break;
                 case "resume": Train(options, resume: true); break;
                 case "generate": Generate(options); break;
@@ -24,24 +25,25 @@ internal static class CorpusCommands
         catch (Exception error) { Console.Error.WriteLine("FAIL: " + error.Message); return 1; }
     }
 
-    private static void Demo(Options options, bool adam = false)
+    private static void Demo(Options options, bool adam = false, bool controlled = false)
     {
         options.Allow("checkpoint", "epochs");
         var corpus = TextCorpus.LoadPairs(Path.Combine(AppContext.BaseDirectory, "Data", "words.jsonl"));
         var tokenizer = corpus.CreateTokenizer(); var data = corpus.Encode(tokenizer);
         var model = NewModel(tokenizer, data, 16, 2, 16, 2, 2, 42);
-        var path = options.Get("checkpoint", Path.Combine("artifacts", adam ? "adam-corpus-demo.json" : "corpus-demo.json"));
+        var path = options.Get("checkpoint", Path.Combine("artifacts", controlled ? "scheduled-corpus-demo.json" : adam ? "adam-corpus-demo.json" : "corpus-demo.json"));
         if (options.Has("checkpoint") && File.Exists(path)) throw new ArgumentException("Demo refuses an existing custom checkpoint; choose a new path.");
         var initial = MeanLoss(model, data);
         var epochs = options.Integer("epochs", adam ? 300 : 500);
         var progress = new TextTrainingState(0, 42, adam ? 0.003 : 0.02, corpus.Fingerprint, adam ? 4 : 1, adam ? "adam" : "sgd");
-        var optimizer = adam ? new AdamOptimizer(model) : null;
+        var adamOptions = controlled ? new AdamOptions(MaxGradientNorm: 1, Schedule: new LinearWarmupDecay(50, 1450, 0.2)) : new AdamOptions();
+        var optimizer = adam ? new AdamOptimizer(model, adamOptions) : null;
         if (adam)
         {
             if (epochs < 2) throw new ArgumentOutOfRangeException(nameof(epochs), "Adam demo needs at least two epochs for resume.");
             Fit(model, tokenizer, corpus, data, progress, epochs / 2, path, optimizer);
             var middle = TextCheckpoint.Load(path); model = middle.Model; tokenizer = middle.Tokenizer; optimizer = middle.Optimizer!;
-            Console.WriteLine($"Resuming Adam from epoch {middle.Training!.EpochsCompleted}, optimizer step {optimizer.GetState().Step}.");
+            Console.WriteLine($"Resuming Adam from epoch {middle.Training!.EpochsCompleted}, optimizer step {optimizer.StepCount}.");
             Fit(model, tokenizer, corpus, data, middle.Training, epochs - epochs / 2, path, optimizer);
         }
         else Fit(model, tokenizer, corpus, data, progress, epochs, path);
@@ -72,12 +74,12 @@ internal static class CorpusCommands
     private static void Train(Options options, bool resume)
     {
         options.Allow("corpus", "checkpoint", "epochs", "format", "prompt-length", "response-length", "stride", "max-samples", "max-bytes", "max-field",
-            "rate", "seed", "new-corpus", "overwrite", "model-size", "heads", "ff", "encoder-layers", "decoder-layers", "optimizer", "batch-size", "beta1", "beta2", "epsilon");
+            "rate", "seed", "new-corpus", "overwrite", "model-size", "heads", "ff", "encoder-layers", "decoder-layers", "optimizer", "batch-size", "beta1", "beta2", "epsilon", "clip-norm", "schedule", "warmup-steps", "decay-steps", "min-rate-factor");
         var path = options.Required("checkpoint"); var corpus = ReadCorpus(options);
         TextTransformer model; CharacterTokenizer tokenizer; TextTrainingState state; EncodedTextPair[] data; AdamOptimizer? optimizer;
         if (resume)
         {
-            foreach (var key in new[] { "model-size", "heads", "ff", "encoder-layers", "decoder-layers", "overwrite", "optimizer", "batch-size", "beta1", "beta2", "epsilon" })
+            foreach (var key in new[] { "model-size", "heads", "ff", "encoder-layers", "decoder-layers", "overwrite", "optimizer", "batch-size", "beta1", "beta2", "epsilon", "clip-norm", "schedule", "warmup-steps", "decay-steps", "min-rate-factor" })
                 if (options.Has(key)) throw new ArgumentException("Resume cannot override architecture/optimizer settings: --" + key);
             var loaded = TextCheckpoint.Load(path); model = loaded.Model; tokenizer = loaded.Tokenizer; optimizer = loaded.Optimizer;
             if (optimizer is not null && loaded.Training is null) throw new ArgumentException("Adam resume needs saved training metadata, including batch size.");
@@ -105,13 +107,27 @@ internal static class CorpusCommands
             if (kind is not ("adam" or "sgd")) throw new ArgumentException("--optimizer must be sgd or adam.");
             var batchSize = options.Integer("batch-size", kind == "adam" ? 4 : 1);
             if (batchSize <= 0) throw new ArgumentOutOfRangeException(nameof(batchSize));
-            if (kind == "sgd" && (batchSize != 1 || new[] { "beta1", "beta2", "epsilon" }.Any(options.Has)))
+            if (kind == "sgd" && (batchSize != 1 || new[] { "beta1", "beta2", "epsilon", "clip-norm", "schedule", "warmup-steps", "decay-steps", "min-rate-factor" }.Any(options.Has)))
                 throw new ArgumentException("Minibatches and Adam settings require --optimizer adam.");
             optimizer = kind == "adam" ? new AdamOptimizer(model, new AdamOptions(options.Number("beta1", 0.9),
-                options.Number("beta2", 0.999), options.Number("epsilon", 1e-8))) : null;
+                options.Number("beta2", 0.999), options.Number("epsilon", 1e-8),
+                options.Has("clip-norm") ? options.Number("clip-norm", 1) : null, ReadSchedule(options))) : null;
             state = new TextTrainingState(0, seed, options.Number("rate", kind == "adam" ? 0.003 : 0.02), corpus.Fingerprint, batchSize, kind);
         }
         Fit(model, tokenizer, corpus, data, state, options.Integer("epochs", 200), path, optimizer);
+    }
+
+    private static LinearWarmupDecay? ReadSchedule(Options options)
+    {
+        var kind = options.Get("schedule", "constant");
+        if (kind == "constant")
+        {
+            if (new[] { "warmup-steps", "decay-steps", "min-rate-factor" }.Any(options.Has))
+                throw new ArgumentException("Schedule settings require --schedule linear.");
+            return null;
+        }
+        if (kind != "linear") throw new ArgumentException("--schedule must be constant or linear.");
+        return new LinearWarmupDecay(options.Integer("warmup-steps", 0), options.Integer("decay-steps", 1000), options.Number("min-rate-factor", 0.1));
     }
 
     private static TextCorpus ReadCorpus(Options options)
@@ -136,7 +152,9 @@ internal static class CorpusCommands
         var end = checked(state.EpochsCompleted + epochs);
         Console.WriteLine($"Samples={data.Length}; vocabulary={tokenizer.VocabularySize}; source capacity={model.SourceLength}; target capacity={model.TargetLength}; parameters={model.ParameterCount}");
         Console.WriteLine($"Initial mean sample token CE: {MeanLoss(model, data):F6}; completed epochs={state.EpochsCompleted}");
-        Console.WriteLine($"Optimizer={state.Optimizer}; batch size={state.BatchSize}; step={optimizer?.GetState().Step ?? 0}");
+        Console.WriteLine($"Optimizer={state.Optimizer}; batch size={state.BatchSize}; step={optimizer?.StepCount ?? 0}");
+        if (optimizer is not null)
+            Console.WriteLine($"Clip norm={optimizer.GetState().Options.MaxGradientNorm?.ToString() ?? "disabled"}; next rate={optimizer.GetNextLearningRate(state.LearningRate):G8}; schedule={optimizer.GetState().Options.Schedule?.ToString() ?? "constant"}");
         TextCheckpoint.Save(path, model, tokenizer, state, optimizer);
         for (var epoch = state.EpochsCompleted; epoch < end; epoch++)
         {
@@ -145,7 +163,7 @@ internal static class CorpusCommands
             if ((epoch + 1) % 50 == 0 || epoch + 1 == end)
             {
                 TextCheckpoint.Save(path, model, tokenizer, state with { EpochsCompleted = epoch + 1 }, optimizer);
-                Console.WriteLine($"Epoch {epoch + 1}: mean sample token CE={MeanLoss(model, data):F6}; checkpoint saved; Adam step={optimizer?.GetState().Step ?? 0}");
+                Console.WriteLine($"Epoch {epoch + 1}: mean sample token CE={MeanLoss(model, data):F6}; checkpoint saved; Adam step={optimizer?.StepCount ?? 0}; next rate={optimizer?.GetNextLearningRate(state.LearningRate) ?? state.LearningRate:G8}");
             }
         }
     }
@@ -173,11 +191,13 @@ internal static class CorpusCommands
         Commands (UTF-8 corpus, .NET 10):
           demo [--checkpoint PATH] [--epochs 500]
           adam-demo [--checkpoint PATH] [--epochs 300]
+          scheduled-demo [--checkpoint PATH] [--epochs 300]
           train --corpus PATH --checkpoint PATH [--epochs 200] [--format pairs|text]
           resume --corpus PATH --checkpoint PATH [--epochs 200] [--new-corpus]
           generate --checkpoint PATH --prompt TEXT [--sample --temperature 1 --top-k 4 --seed 42]
         Training settings: --rate --seed --model-size --heads --ff --encoder-layers --decoder-layers
         Optimizer: --optimizer sgd|adam --batch-size --beta1 --beta2 --epsilon (new training only)
+        Adam controls: --clip-norm --schedule constant|linear --warmup-steps --decay-steps --min-rate-factor
         Plain-text windows: --prompt-length --response-length --stride
         Corpus limits: --max-bytes --max-samples --max-field; generation limit: --max-tokens
         Train refuses an existing checkpoint unless --overwrite. Demo replaces its default artifact.
