@@ -41,6 +41,11 @@ static void Forward()
     var output = 1 / (1 + Math.Exp(-0.75));
     Near(output, net.Predict([2, 1])[0]);
     Near(0.5 * Math.Pow(output - 1, 2), net.Loss([2, 1], [1]));
+    var multilayer = new DenseNetwork([2, 2, 1], 0);
+    multilayer.SetParameters([0.1, 0.2, 0.3, -0.4, 0.5, -0.6, 0.7, -0.8, 0.9]);
+    var hidden0 = 1 / (1 + Math.Exp(-0.3));
+    var hidden1 = 1 / (1 + Math.Exp(1.9));
+    Near(1 / (1 + Math.Exp(-(0.7 * hidden0 - 0.8 * hidden1 + 0.9))), multilayer.Predict([2, -1])[0]);
     net.SetParameters([0, 0, -1000]);
     Near(0, net.Predict([1, 1])[0]);
     net.SetParameters([0, 0, 1000]);
@@ -108,6 +113,8 @@ static void Invalid()
     Throws<ArgumentNullException>(() => new DenseNetwork(null!, 0));
     Throws<ArgumentException>(() => new DenseNetwork([2], 0));
     Throws<ArgumentException>(() => new DenseNetwork([2, 0], 0));
+    Throws<ArgumentException>(() => new DenseNetwork([-2, 1], 0));
+    Throws<OverflowException>(() => new DenseNetwork([int.MaxValue, 1], 0));
     var net = new DenseNetwork([2, 1], 0);
     var before = net.GetParameters();
     Throws<ArgumentException>(() => net.Predict([1]));
@@ -116,6 +123,8 @@ static void Invalid()
     Throws<ArgumentException>(() => net.Predict([double.PositiveInfinity, 0]));
     Throws<ArgumentException>(() => net.TrainSample([0, 1], [2], 0.5));
     Throws<ArgumentException>(() => net.Loss([0, 1], []));
+    Throws<ArgumentException>(() => net.ComputeGradient([0, 1], [-0.1]));
+    Throws<ArgumentException>(() => net.ComputeGradient([0, 1], [double.NaN]));
     Throws<ArgumentNullException>(() => net.Loss([0, 1], null!));
     foreach (var rate in new[] { 0, -1, double.NaN, double.PositiveInfinity })
         Throws<ArgumentOutOfRangeException>(() => net.TrainSample([0, 1], [1], rate));
@@ -133,6 +142,6 @@ static void Overflow()
     Same(before, net.GetParameters());
     net.SetParameters([0, 0, 0]);
     before = net.GetParameters();
-    Throws<ArithmeticException>(() => net.TrainSample([double.MaxValue, 0], [1], double.MaxValue));
+    Throws<ArithmeticException>(() => net.TrainSample([0, double.MaxValue], [1], double.MaxValue));
     Same(before, net.GetParameters());
 }

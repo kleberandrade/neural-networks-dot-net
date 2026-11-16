@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/examples/">
+    <Project Path="examples/Xor/Xor.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/NeuralNetworks/NeuralNetworks.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/NeuralNetworks.Tests/NeuralNetworks.Tests.csproj" />
+  </Folder>
+</Solution>
