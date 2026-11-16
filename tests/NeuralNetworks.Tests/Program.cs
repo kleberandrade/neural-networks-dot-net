@@ -27,7 +27,12 @@ var tests = new (string Name, Action Run)[]
     ("Deep numerical and token Transformer gradients", TextTransformerTests.StacksAndGradients),
     ("Categorical loss, stable softmax, EOS and generation cap", TextTransformerTests.CategoricalAndGeneration),
     ("Deep token causality, padding, validation and isolation", TextTransformerTests.CausalityAndBoundaries),
-    ("Two-layer encoder-decoder learns text generation", TextTransformerTests.LearnsText)
+    ("Two-layer encoder-decoder learns text generation", TextTransformerTests.LearnsText),
+    ("UTF-8 pair corpus and text continuation windows", CorpusCheckpointTests.CorpusFiles),
+    ("Model/tokenizer checkpoint roundtrip and continued SGD", CorpusCheckpointTests.CheckpointRoundtrip),
+    ("Corrupt, incompatible and oversized checkpoints reject", CorpusCheckpointTests.InvalidCheckpoints),
+    ("Seeded temperature/top-k sampling", CorpusCheckpointTests.Sampling),
+    ("File-backed epoch resume matches uninterrupted training", CorpusCheckpointTests.EpochResume)
 };
 var failures = 0;
 foreach (var test in tests)

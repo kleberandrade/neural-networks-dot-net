@@ -17,6 +17,8 @@ public sealed class TextTransformer : ParameterizedModel
     public int TargetLength { get; }
     public int ModelSize { get; }
     public int HeadCount { get; }
+    public int FeedForwardSize { get; }
+    public int InitializationSeed { get; }
     public int EncoderLayerCount { get; }
     public int DecoderLayerCount { get; }
 
@@ -30,6 +32,7 @@ public sealed class TextTransformer : ParameterizedModel
         MultiHeadAttention.Validate(modelSize, headCount);
         Guard.Positive(feedForwardSize, nameof(feedForwardSize));
         ModelSize = modelSize; HeadCount = headCount;
+        FeedForwardSize = feedForwardSize; InitializationSeed = seed;
         EncoderLayerCount = Guard.Positive(encoderLayerCount, nameof(encoderLayerCount));
         DecoderLayerCount = Guard.Positive(decoderLayerCount, nameof(decoderLayerCount));
         sourceEmbedding = AddEmbedding(vocabularySize, modelSize);
@@ -82,19 +85,26 @@ public sealed class TextTransformer : ParameterizedModel
     }
 
     /// <summary>Greedy IDs excluding PAD/BOS; includes EOS when emitted and reports whether EOS was reached.</summary>
-    public TokenGeneration Generate(int[] source, int? maxNewTokens = null)
+    public TokenGeneration Generate(int[] source, int? maxNewTokens = null) =>
+        Decode(source, maxNewTokens, TokenSampling.Greedy);
+
+    public TokenGeneration Sample(int[] source, TextSamplingOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        TokenSampling.Validate(options, VocabularySize);
+        var random = new Random(options.Seed);
+        return Decode(source, options.MaxNewTokens, logits => TokenSampling.Choose(logits, options, random));
+    }
+
+    private TokenGeneration Decode(int[] source, int? maxNewTokens, Func<Scalar[], int> choose)
     {
         var sourceIds = TokenSequences.Prefix(source, SourceLength, VocabularySize);
         var limit = maxNewTokens ?? TargetLength;
         if (limit <= 0 || limit > TargetLength) throw new ArgumentOutOfRangeException(nameof(maxNewTokens));
-        var decoder = new List<int> { CharacterTokenizer.BosId };
-        var generated = new List<int>();
+        var decoder = new List<int> { CharacterTokenizer.BosId }; var generated = new List<int>();
         for (var i = 0; i < limit; i++)
         {
-            var logits = Evaluate(sourceIds, decoder.ToArray()).Logits[^1];
-            var next = CharacterTokenizer.EosId;
-            for (var id = CharacterTokenizer.EosId + 1; id < VocabularySize; id++)
-                if (logits[id].Value > logits[next].Value) next = id;
+            var logits = Evaluate(sourceIds, decoder.ToArray()).Logits[^1]; var next = choose(logits);
             generated.Add(next);
             if (next == CharacterTokenizer.EosId) return new TokenGeneration(generated.ToArray(), true);
             decoder.Add(next);
@@ -127,6 +137,12 @@ public sealed class TextTransformer : ParameterizedModel
         if (d[0] != CharacterTokenizer.BosId || d.Skip(1).Any(id => id == CharacterTokenizer.BosId))
             throw new ArgumentException("Decoder prefix must begin with exactly one BOS.", nameof(decoder));
         return (s, d);
+    }
+
+    internal EncodedTextPair CopyTrainingPair(int[] source, int[] target)
+    {
+        var prepared = PrepareTarget(source, target);
+        return new EncodedTextPair(prepared.Source, prepared.Target);
     }
 
     private (int[] Source, int[] Decoder, int[] Target) PrepareTarget(int[] source, int[] target)

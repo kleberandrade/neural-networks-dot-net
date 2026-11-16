@@ -10,13 +10,14 @@ public sealed class CharacterTokenizer
     public const int BosId = 1;
     public const int EosId = 2;
     public const int UnkId = 3;
+    private static readonly string[] SpecialVocabulary = ["<pad>", "<bos>", "<eos>", "<unk>"];
     private readonly string[] vocabulary;
     private readonly Dictionary<int, int> ids;
     public int VocabularySize => vocabulary.Length;
 
     private CharacterTokenizer(int[] codePoints)
     {
-        vocabulary = ["<pad>", "<bos>", "<eos>", "<unk>", .. codePoints.Select(x => new Rune(x).ToString())];
+        vocabulary = [.. SpecialVocabulary, .. codePoints.Select(x => new Rune(x).ToString())];
         ids = codePoints.Select((point, index) => (point, index)).ToDictionary(x => x.point, x => x.index + 4);
     }
 
@@ -24,9 +25,25 @@ public sealed class CharacterTokenizer
     {
         ArgumentNullException.ThrowIfNull(corpus);
         var codePoints = new SortedSet<int>();
-        foreach (var text in corpus) codePoints.UnionWith(CodePoints(text));
+        foreach (var text in corpus) codePoints.UnionWith(ReadScalars(text));
         if (codePoints.Count == 0) throw new ArgumentException("Corpus must contain at least one Unicode scalar.", nameof(corpus));
         return new CharacterTokenizer(codePoints.ToArray());
+    }
+
+    public static CharacterTokenizer FromVocabulary(string[] vocabulary)
+    {
+        ArgumentNullException.ThrowIfNull(vocabulary);
+        if (vocabulary.Length < 5 || !vocabulary.Take(4).SequenceEqual(SpecialVocabulary))
+            throw new ArgumentException("Vocabulary has invalid reserved IDs.", nameof(vocabulary));
+        var points = new int[vocabulary.Length - 4];
+        for (var i = 4; i < vocabulary.Length; i++)
+        {
+            var scalar = ReadScalars(vocabulary[i]);
+            if (scalar.Length != 1 || (i > 4 && scalar[0] <= points[i - 5]))
+                throw new ArgumentException("Vocabulary must contain unique, ascending Unicode scalars.", nameof(vocabulary));
+            points[i - 4] = scalar[0];
+        }
+        return new CharacterTokenizer(points);
     }
 
     public string[] GetVocabulary() => (string[])vocabulary.Clone();
@@ -35,7 +52,7 @@ public sealed class CharacterTokenizer
     {
         var result = new List<int>();
         if (addBos) result.Add(BosId);
-        foreach (var point in CodePoints(text)) result.Add(ids.GetValueOrDefault(point, UnkId));
+        foreach (var point in ReadScalars(text)) result.Add(ids.GetValueOrDefault(point, UnkId));
         if (addEos) result.Add(EosId);
         return result.ToArray();
     }
@@ -53,7 +70,7 @@ public sealed class CharacterTokenizer
         return result.ToString();
     }
 
-    private static int[] CodePoints(string text)
+    internal static int[] ReadScalars(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
         var result = new List<int>();
