@@ -110,6 +110,15 @@ dotnet run --project examples/TextGeneration -- b
 
 This example trains two encoder layers and two decoder layers on `a → ola` and `b → oi`, then generates token IDs greedily until EOS. It checks exact reproduction of both training replies and a reduction in mean token cross-entropy. See [the didactic text-generation guide](docs/architectures/transformer-text.md) for Unicode vocabulary fitting, learned embeddings, stacked attention, shifted targets, PAD/BOS/EOS/UNK and limitations. It demonstrates tiny-corpus memorization.
 
+### Corpus files and saved checkpoints
+
+```sh
+dotnet run --project examples/CorpusTraining -- demo
+dotnet run --project examples/CorpusTraining -- generate --checkpoint artifacts/corpus-demo.json --prompt "?" --sample --top-k 4 --seed 7
+```
+
+The file-backed example trains 20 JSONL records, saves model/configuration/tokenizer together, reloads without retraining, and demonstrates greedy and seeded temperature/top-k generation. It supports plain UTF-8 continuation windows and `train`, `resume`, `generate` commands. See the [didactic corpus/checkpoint guide](docs/architectures/transformer-corpus-checkpoints.md) and [versioned file format](docs/CHECKPOINT_FORMAT.md).
+
 ## Tests and CI
 
 ```sh
@@ -120,6 +129,7 @@ dotnet run --project examples/Xor --configuration Release --no-build -- infer
 dotnet run --project examples/Architectures --configuration Release --no-build -- all
 dotnet run --project examples/Transformer --configuration Release --no-build -- all
 dotnet run --project examples/TextGeneration --configuration Release --no-build
+dotnet run --project examples/CorpusTraining --configuration Release --no-build -- demo
 dotnet format --verify-no-changes --no-restore
 ```
 
@@ -135,7 +145,7 @@ See the [individual architecture guides](docs/README.md), [common contracts](doc
 - The numerical `IGradientNetwork` models use sigmoid heads and half summed squared-error loss. `TextTransformer` uses learned token embeddings, vocabulary logits/softmax and mean categorical cross-entropy. RBF centers and width are fixed; Perceptron, Hopfield and SOM use their own learning rules.
 - Sequential per-sample SGD only. Data preparation, normalization, shuffling, evaluation splits and stopping criteria belong to the caller. Seeds and learning rates affect convergence. Sigmoid can saturate, ReLU filters can become inactive, and sequence gradients can vanish or explode.
 - Finite inputs can still overflow arithmetic. Rejected steps preserve model parameters. Instances require synchronization around concurrent mutation.
-- Explicit scalar loops and temporary graphs favor readability over speed. There is no GPU execution, optimized tensor backend, minibatch optimizer, gradient clipping or model persistence format. Use tiny datasets and short sequences.
+- Explicit scalar loops and temporary graphs favor readability over speed. There is no GPU execution, optimized tensor backend, minibatch optimizer or gradient clipping. TextTransformer has a versioned model/tokenizer checkpoint; the numerical models have no standard persistence format. Use tiny datasets and short sequences.
 - Seeds reproduce results on the same runtime, not across all runtime versions. Large dimensions can exhaust memory; parameter-count overflow is checked.
 - Example training errors are measurements on synthetic training cases, with no real-world accuracy, throughput or generalization guarantee.
 

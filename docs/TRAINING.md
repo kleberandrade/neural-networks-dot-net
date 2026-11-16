@@ -29,7 +29,7 @@ The tape is recreated for each call, with iterative reverse traversal. It is an 
 
 Linear blocks use Xavier uniform weights with bounds `±sqrt(6/(fanIn+fanOut))` and zero biases. Layer normalization starts with gamma 1 and beta 0. Recurrent gate biases, including LSTM forget biases, start at zero. The same topology, seed, runtime, inputs and training order reproduce results. This is not a cross-runtime serialization guarantee.
 
-Models copy topology, RBF centers and supplied parameter arrays. Predictions, gradients, encodings and snapshots are detached arrays. Caller-owned inputs must not change during a call. Model instances are mutable and require external synchronization around concurrent mutation; otherwise use separate instances. There is no persistence format, optimizer state, minibatching, clipping, scheduling, regularization or GPU execution.
+Models copy topology, RBF centers and supplied parameter arrays. Predictions, gradients, encodings and snapshots are detached arrays. Caller-owned inputs must not change during a call. Model instances are mutable and require external synchronization around concurrent mutation; otherwise use separate instances. TextTransformer supports the versioned [checkpoint format](CHECKPOINT_FORMAT.md); numerical models still use manual snapshots. There is no momentum/Adam optimizer state, minibatching, clipping, automatic scheduling, regularization or GPU execution.
 
 ## Public boundaries
 
@@ -82,4 +82,10 @@ The encoder-decoder uses the same SGD engine with a per-call forward function an
 
 `TransformerBuilder` allocates fresh parameters per layer; `TransformerStacks` sends source through every encoder and decoder state through every decoder. All decoder cross-attention uses the final encoder memory. Causal masks remain active at every decoder layer. The numerical classes default to one layer for source compatibility; the text model defaults to two encoder/two decoder layers. Depth, head count and the exact vocabulary mapping must accompany text parameter snapshots.
 
-Text parameter order is source embedding matrix, target embedding matrix (both token-major), every encoder layer, every decoder layer, then vocabulary head. Encoder/decoder block order is documented in the architecture guides. The numerical pooled encoder preserves its original first-layer/head slots and appends additional layers afterward. The numerical sequence model allocates all encoders before all decoders and its final head. These models provide no checkpoint file format.
+Text parameter order is source embedding matrix, target embedding matrix (both token-major), every encoder layer, every decoder layer, then vocabulary head. Encoder/decoder block order is documented in the architecture guides. The numerical pooled encoder preserves its original first-layer/head slots and appends additional layers afterward. The numerical sequence model allocates all encoders before all decoders and its final head. TextTransformer provides a [model/tokenizer checkpoint](CHECKPOINT_FORMAT.md); the numerical Transformer APIs retain manual parameter snapshots.
+
+## File-backed epochs and resume
+
+`TextCorpus` loads strict UTF-8 JSONL prompt/response records or complete Unicode continuation windows. Encoding adds EOS and rejects unknown corpus scalars by default. `TextTraining.TrainEpoch` copies/validates the complete epoch data before updates, then uses a local shuffle RNG seeded with `unchecked(shuffleSeed + epoch)`. An invalid late sample cannot partially apply an epoch, but a numerical failure during successful updates does not roll back prior steps.
+
+`TextCheckpoint` stores weights, exact vocabulary, architecture and optional epoch/rate/shuffle/corpus metadata together. The CLI saves only completed-epoch progress, verifies fingerprints on resume and never refits a loaded vocabulary silently. See [the complete workflow](architectures/transformer-corpus-checkpoints.md). Loss reports average each sample's mean token cross-entropy equally; they are not global token-weighted corpus perplexity.
