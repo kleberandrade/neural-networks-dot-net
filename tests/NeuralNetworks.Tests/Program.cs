@@ -8,7 +8,10 @@ var tests = new (string Name, Action Run)[]
     ("Seed and parameter snapshots are reproducible and isolated", Isolation),
     ("XOR learns all four cases", Xor),
     ("Invalid boundaries reject before mutation", Invalid),
-    ("Extreme arithmetic is rejected atomically", Overflow)
+    ("Extreme arithmetic is rejected atomically", Overflow),
+    ("Perceptron learns AND and rejects invalid inputs", ClassicTests.PerceptronLearns),
+    ("Hopfield recalls a noisy memory and decreases energy", ClassicTests.HopfieldRecalls),
+    ("SOM updates winner and grid neighbors", ClassicTests.SomOrganizes),
 };
 var failures = 0;
 foreach (var test in tests)
