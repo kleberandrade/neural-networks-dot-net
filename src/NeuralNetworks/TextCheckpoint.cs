@@ -15,7 +15,7 @@ public sealed record TextCheckpointLimits(long MaxFileBytes = 32 * 1024 * 1024, 
 public static class TextCheckpoint
 {
     private const string Format = "neural-networks-dot-net.text";
-    private const int Version = 2;
+    private const int Version = 3;
     private sealed record Configuration(int VocabularySize, int SourceLength, int TargetLength, int ModelSize,
         int HeadCount, int FeedForwardSize, int EncoderLayerCount, int DecoderLayerCount, int Seed);
     private sealed record Payload(Configuration Configuration, string[] Vocabulary, double[] Parameters, TextTrainingState? Training, AdamState? Optimizer);
@@ -47,7 +47,7 @@ public static class TextCheckpoint
             using var document = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 32 });
             var root = document.RootElement; TextFiles.UniqueProperties(root); Names(root, "format", "version", "payload", "sha256");
             var version = root.GetProperty("version").GetInt32();
-            if (root.GetProperty("format").GetString() != Format || (version != 1 && version != Version))
+            if (root.GetProperty("format").GetString() != Format || (version != 1 && version != 2 && version != Version))
                 throw new InvalidDataException("Unsupported text checkpoint format/version.");
             var payload = root.GetProperty("payload");
             if (version == 1) Names(payload, "configuration", "vocabulary", "parameters", "training");
@@ -67,10 +67,10 @@ public static class TextCheckpoint
             var progress = payload.GetProperty("training");
             if (version == 1 && progress.ValueKind != JsonValueKind.Null)
                 Names(progress, "epochsCompleted", "shuffleSeed", "learningRate", "corpusFingerprint");
-            if (version == 2 && progress.ValueKind != JsonValueKind.Null)
+            if (version >= 2 && progress.ValueKind != JsonValueKind.Null)
                 Names(progress, "epochsCompleted", "shuffleSeed", "learningRate", "corpusFingerprint", "batchSize", "optimizer");
             var training = progress.Deserialize<TextTrainingState?>(TextFiles.Json); ValidateState(training);
-            var adamState = version == 1 ? null : ReadAdamState(payload.GetProperty("optimizer"), expected);
+            var adamState = version == 1 ? null : ReadAdamState(payload.GetProperty("optimizer"), expected, version);
             ValidateOptimizerPair(training, adamState is not null);
             var model = new TextTransformer(config.VocabularySize, config.SourceLength, config.TargetLength, config.ModelSize,
                 config.HeadCount, config.FeedForwardSize, config.EncoderLayerCount, config.DecoderLayerCount, config.Seed);
@@ -113,11 +113,18 @@ public static class TextCheckpoint
             throw new ArgumentException("Invalid training progress metadata.", nameof(state));
     }
 
-    private static AdamState? ReadAdamState(JsonElement value, int parameterCount)
+    private static AdamState? ReadAdamState(JsonElement value, int parameterCount, int version)
     {
         if (value.ValueKind == JsonValueKind.Null) return null;
         Names(value, "options", "step", "firstMoment", "secondMoment");
-        Names(value.GetProperty("options"), "beta1", "beta2", "epsilon");
+        var options = value.GetProperty("options");
+        if (version == 2) Names(options, "beta1", "beta2", "epsilon");
+        else
+        {
+            Names(options, "beta1", "beta2", "epsilon", "maxGradientNorm", "schedule");
+            var schedule = options.GetProperty("schedule");
+            if (schedule.ValueKind != JsonValueKind.Null) Names(schedule, "warmupSteps", "decaySteps", "minimumFactor");
+        }
         if (value.GetProperty("firstMoment").GetArrayLength() != parameterCount || value.GetProperty("secondMoment").GetArrayLength() != parameterCount)
             throw new InvalidDataException("Adam moments must match model parameter count.");
         var state = value.Deserialize<AdamState>(TextFiles.Json)!; AdamOptimizer.ValidateState(state, parameterCount);

@@ -118,7 +118,7 @@ internal static class CorpusCheckpointTests
                 ["corpusFingerprint"] = new string('a', 64)
             });
             Check.Throws<InvalidDataException>(() => TextCheckpoint.Load(path));
-            File.WriteAllText(path, original.Replace("\"version\":2", "\"version\":2,\"version\":2"));
+            File.WriteAllText(path, original.Replace("\"version\":3", "\"version\":3,\"version\":3"));
             Check.Throws<InvalidDataException>(() => TextCheckpoint.Load(path));
             File.WriteAllText(path, original);
             Check.Throws<InvalidDataException>(() => TextCheckpoint.Load(path, new TextCheckpointLimits(MaxParameters: 1)));

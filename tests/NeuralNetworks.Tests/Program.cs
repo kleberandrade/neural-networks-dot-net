@@ -36,7 +36,11 @@ var tests = new (string Name, Action Run)[]
     ("Adam known moments and bias-corrected updates", AdamTests.KnownUpdates),
     ("Minibatch mean gradients and final partial batch", AdamTests.MinibatchMean),
     ("Adam validation, ownership and atomic rejection", AdamTests.Boundaries),
-    ("Adam checkpoint resume and legacy SGD compatibility", AdamTests.CheckpointResume)
+    ("Adam checkpoint resume and legacy SGD compatibility", AdamTests.CheckpointResume),
+    ("Global norm clipping and extreme finite gradients", TrainingControlTests.GlobalClipping),
+    ("Warmup and linear decay known rates", TrainingControlTests.ScheduleValues),
+    ("Clipped mean gradients, scheduled steps and atomic rejection", TrainingControlTests.BatchAndAtomicity),
+    ("Scheduled clipped Adam resume and v2 compatibility", TrainingControlTests.CheckpointResume)
 };
 var failures = 0;
 foreach (var test in tests)

@@ -1,6 +1,7 @@
 namespace NeuralNetworks;
 
-public sealed record AdamOptions(double Beta1 = 0.9, double Beta2 = 0.999, double Epsilon = 1e-8);
+public sealed record AdamOptions(double Beta1 = 0.9, double Beta2 = 0.999, double Epsilon = 1e-8,
+    double? MaxGradientNorm = null, LinearWarmupDecay? Schedule = null);
 public sealed record AdamState(AdamOptions Options, long Step, double[] FirstMoment, double[] SecondMoment);
 
 /// <summary>Model-bound Adam with bias correction and transactional parameter/moment updates.</summary>
@@ -17,6 +18,16 @@ public sealed class AdamOptimizer
         ArgumentNullException.ThrowIfNull(model);
         this.model = model; this.options = options ?? new AdamOptions(); ValidateOptions(this.options);
         firstMoment = new double[model.ParameterCount]; secondMoment = new double[model.ParameterCount];
+    }
+
+    public long StepCount => step;
+
+    /// <summary>Rate for the next successful update; inspection does not advance the schedule.</summary>
+    public double GetNextLearningRate(double baseLearningRate)
+    {
+        Guard.LearningRate(baseLearningRate);
+        var nextStep = checked(step + 1);
+        return options.Schedule?.GetLearningRate(baseLearningRate, nextStep) ?? baseLearningRate;
     }
 
     public AdamState GetState() => new(options, step, (double[])firstMoment.Clone(), (double[])secondMoment.Clone());
@@ -46,6 +57,8 @@ public sealed class AdamOptimizer
     private static void ValidateOptions(AdamOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+        if (options.MaxGradientNorm is { } threshold) GradientClipping.ValidateThreshold(threshold);
+        options.Schedule?.Validate();
         if (!double.IsFinite(options.Beta1) || options.Beta1 < 0 || options.Beta1 >= 1
             || !double.IsFinite(options.Beta2) || options.Beta2 < 0 || options.Beta2 >= 1
             || !double.IsFinite(options.Epsilon) || options.Epsilon <= 0)
@@ -55,19 +68,21 @@ public sealed class AdamOptimizer
     public void Step(double[] gradient, double learningRate)
     {
         Guard.Vector(gradient, model.ParameterCount, nameof(gradient)); Guard.LearningRate(learningRate);
+        var rate = GetNextLearningRate(learningRate);
+        var applied = options.MaxGradientNorm is { } threshold ? GradientClipping.ClipGlobalNorm(gradient, threshold) : gradient;
         var nextStep = checked(step + 1); var updated = model.GetParameters();
         var nextFirst = new double[updated.Length]; var nextSecond = new double[updated.Length];
         var firstCorrection = 1 - Math.Pow(options.Beta1, nextStep);
         var secondCorrection = 1 - Math.Pow(options.Beta2, nextStep);
         for (var i = 0; i < updated.Length; i++)
         {
-            nextFirst[i] = Guard.Finite(options.Beta1 * firstMoment[i] + (1 - options.Beta1) * gradient[i]);
-            nextSecond[i] = Guard.Finite(options.Beta2 * secondMoment[i] + (1 - options.Beta2) * Guard.Finite(gradient[i] * gradient[i]));
+            nextFirst[i] = Guard.Finite(options.Beta1 * firstMoment[i] + (1 - options.Beta1) * applied[i]);
+            nextSecond[i] = Guard.Finite(options.Beta2 * secondMoment[i] + (1 - options.Beta2) * Guard.Finite(applied[i] * applied[i]));
             var correctedFirst = Guard.Finite(nextFirst[i] / firstCorrection);
             var correctedSecond = Guard.Finite(nextSecond[i] / secondCorrection);
             var denominator = Guard.Finite(Math.Sqrt(correctedSecond) + options.Epsilon);
             var direction = Guard.Finite(correctedFirst / denominator);
-            updated[i] = Guard.Finite(updated[i] - Guard.Finite(learningRate * direction));
+            updated[i] = Guard.Finite(updated[i] - Guard.Finite(rate * direction));
         }
         model.SetParameters(updated);
         firstMoment = nextFirst; secondMoment = nextSecond; step = nextStep;
