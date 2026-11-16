@@ -53,6 +53,8 @@ internal readonly record struct Scalar(Tape Tape, int Id)
         return Tape.Add(value, Id, -1, value, 0);
     }
 
+    public Scalar Log() => Tape.Add(Math.Log(Value), Id, -1, 1 / Value, 0);
+
     public Scalar Sqrt()
     {
         var value = Math.Sqrt(Value);

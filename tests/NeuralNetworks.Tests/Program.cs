@@ -23,6 +23,11 @@ var tests = new (string Name, Action Run)[]
     ("Decoder causality, padding and cross-attention", TransformerTests.CausalAndPaddingMasks),
     ("Encoder-decoder boundaries, isolation and atomic updates", TransformerTests.Boundaries),
     ("Encoder-decoder learns autoregressive sequence reversal", TransformerTests.LearnsReverse),
+    ("Unicode character tokenization and special tokens", TextTransformerTests.Tokenizer),
+    ("Deep numerical and token Transformer gradients", TextTransformerTests.StacksAndGradients),
+    ("Categorical loss, stable softmax, EOS and generation cap", TextTransformerTests.CategoricalAndGeneration),
+    ("Deep token causality, padding, validation and isolation", TextTransformerTests.CausalityAndBoundaries),
+    ("Two-layer encoder-decoder learns text generation", TextTransformerTests.LearnsText)
 };
 var failures = 0;
 foreach (var test in tests)

@@ -25,4 +25,5 @@ jobs:
       - run: dotnet run --project examples/Xor --configuration Release --no-build -- infer
       - run: dotnet run --project examples/Architectures --configuration Release --no-build -- all
       - run: dotnet run --project examples/Transformer --configuration Release --no-build -- all
+      - run: dotnet run --project examples/TextGeneration --configuration Release --no-build
       - run: dotnet format --verify-no-changes --no-restore
