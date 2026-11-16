@@ -27,4 +27,5 @@ jobs:
       - run: dotnet run --project examples/Architectures --configuration Release --no-build -- all
       - run: dotnet run --project examples/Transformer --configuration Release --no-build -- all
       - run: dotnet run --project examples/TextGeneration --configuration Release --no-build
+      - run: dotnet run --project examples/CorpusTraining --configuration Release --no-build -- demo
       - run: dotnet format --verify-no-changes --no-restore

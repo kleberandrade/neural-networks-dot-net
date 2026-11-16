@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/examples/">
     <Project Path="examples/Architectures/Architectures.csproj" />
+    <Project Path="examples/CorpusTraining/CorpusTraining.csproj" />
     <Project Path="examples/TextGeneration/TextGeneration.csproj" />
     <Project Path="examples/Transformer/Transformer.csproj" />
     <Project Path="examples/Xor/Xor.csproj" />

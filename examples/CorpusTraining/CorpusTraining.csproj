@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../src/NeuralNetworks/NeuralNetworks.csproj" /></ItemGroup>
+  <ItemGroup><Content Include="Data/**/*" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
+</Project>
